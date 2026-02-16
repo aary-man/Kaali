@@ -150,6 +150,7 @@ export function addBid(state: GameState, playerId: PlayerId, amount: number | nu
   }
 
   const minBid = state.minimumBid ?? getMinimumBid(state.numDecks);
+  const maxBid = getTotalPoints(state.numDecks);
   const currentHighBid = state.bids
     .filter((b) => !b.passed)
     .sort((a, b) => b.amount - a.amount)[0]?.amount || null;
@@ -165,6 +166,9 @@ export function addBid(state: GameState, playerId: PlayerId, amount: number | nu
       createdAt: Date.now(),
     });
   } else {
+    if (amount > maxBid) {
+      throw new Error(`Invalid bid amount. Maximum possible bid is ${maxBid}.`);
+    }
     if (!isValidBid(amount, currentHighBid, minBid)) {
       throw new Error(`Invalid bid amount. Must be at least ${minBid} and higher than current bid in 5-point increments.`);
     }
@@ -178,17 +182,21 @@ export function addBid(state: GameState, playerId: PlayerId, amount: number | nu
   }
 
   // Check if bidding is complete
-  const activeBids = newBids.filter((b) => !b.passed);
   const allPassedAfterLastBid = checkBiddingComplete(newBids, state.players);
+  const latestBid = newBids[newBids.length - 1];
+  const reachedMaxBid = !latestBid.passed && latestBid.amount >= maxBid;
 
   let newPhase: Phase = state.phase;
   let winningBid: Bid | undefined = state.winningBid;
   let bidderId: PlayerId | undefined = state.bidderId;
   let nextPlayerId: PlayerId | undefined;
 
-  if (allPassedAfterLastBid && activeBids.length === 1) {
+  if (reachedMaxBid || allPassedAfterLastBid) {
     // Bidding complete
-    winningBid = activeBids[0];
+    winningBid = getLastActiveBid(newBids);
+    if (!winningBid) {
+      throw new Error('Bidding completion reached without a valid winning bid');
+    }
     bidderId = winningBid.playerId;
     newPhase = 'choose_trump_and_partners';
     nextPlayerId = bidderId;
@@ -212,9 +220,6 @@ function checkBiddingComplete(bids: Bid[], players: PlayerId[]): boolean {
   // Need at least one full round so everyone has had a turn
   if (bids.length < players.length) return false;
 
-  const activeBids = bids.filter((b) => !b.passed);
-  if (activeBids.length !== 1) return false;
-
   // Find the LAST (most recent) active bid in the array - that's the current high bid
   let lastActiveBidIndex = -1;
   for (let i = bids.length - 1; i >= 0; i--) {
@@ -230,6 +235,15 @@ function checkBiddingComplete(bids: Bid[], players: PlayerId[]): boolean {
   if (bidsAfterLastActive.length < players.length - 1) return false;
 
   return bidsAfterLastActive.every((b) => b.passed);
+}
+
+function getLastActiveBid(bids: Bid[]): Bid | undefined {
+  for (let i = bids.length - 1; i >= 0; i--) {
+    if (!bids[i].passed) {
+      return bids[i];
+    }
+  }
+  return undefined;
 }
 
 export function setTrumpAndPartners(

@@ -137,13 +137,13 @@ export default function GamePage() {
   const partnerSelectionValid =
     selectedPartnerCards.length === requiredPartners &&
     new Set(selectedPartnerKeys).size === selectedPartnerKeys.length;
-  const rankOrder: Rank[] = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
-  const suitOrder: Suit[] = ['♠', '♥', '♦', '♣'];
+  const rankOrderAscending: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  const suitOrder: Suit[] = ['♣', '♦', '♥', '♠'];
   const sortCardsForDisplay = (cards: Card[]) =>
     [...cards].sort((a, b) => {
       const suitCmp = suitOrder.indexOf(a.suit) - suitOrder.indexOf(b.suit);
       if (suitCmp !== 0) return suitCmp;
-      return rankOrder.indexOf(a.rank) - rankOrder.indexOf(b.rank);
+      return rankOrderAscending.indexOf(a.rank) - rankOrderAscending.indexOf(b.rank);
     });
   const sortedMyHand = sortCardsForDisplay(myHand);
   const groupedMyHand = suitOrder
@@ -152,6 +152,11 @@ export default function GamePage() {
       cards: sortedMyHand.filter((c) => c.suit === suit),
     }))
     .filter((group) => group.cards.length > 0);
+  const amSelectedPartner = gameState.partnerCards.some((partnerCard) =>
+    sortedMyHand.some(
+      (handCard) => handCard.rank === partnerCard.rank && handCard.suit === partnerCard.suit
+    )
+  );
 
   const shortId = (pid: string) => pid.slice(-4);
   const displayName = (pid: string) => gameState.playerNames?.[pid] || `Player ${shortId(pid)}`;
@@ -207,12 +212,13 @@ export default function GamePage() {
     );
   };
 
+  const showLeaderboardTotals = gameState.phase === 'finished';
   return (
-    <div className="min-h-screen bg-[#f5f6f8] p-4 text-black">
-      <div className="mx-auto max-w-7xl">
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="h-screen overflow-hidden bg-[#f5f6f8] p-3 text-black">
+      <div className="mx-auto h-full max-w-7xl">
+        <div className="grid h-full gap-3 lg:grid-cols-[1fr_320px]">
+          <div className="flex min-h-0 flex-col gap-3">
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
                   <h1 className="text-xl font-semibold">Game {gameId.slice(0, 8)} · Hand {gameState.handNumber ?? 1}</h1>
@@ -225,8 +231,13 @@ export default function GamePage() {
                     {gameState.trumpSuit ? ` • Trump ${gameState.trumpSuit}` : ''}
                     {gameState.winningBid ? ` • Bid ${gameState.winningBid.amount}` : ''}
                   </p>
-                  {amRevealedPartner && (
+                  {amSelectedPartner && !amRevealedPartner && (
                     <p className="inline-block rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs font-medium">
+                      You are a partner (hidden until you play the called card)
+                    </p>
+                  )}
+                  {amRevealedPartner && (
+                    <p className="inline-block rounded-full border border-black bg-black px-3 py-1 text-xs font-medium text-white">
                       You are a revealed partner
                     </p>
                   )}
@@ -266,10 +277,10 @@ export default function GamePage() {
               </div>
             )}
 
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
               <h2 className="mb-3 text-center text-base font-semibold text-gray-800">Table</h2>
 
-              <div className="relative mx-auto h-[470px] max-w-[700px] rounded-[999px] border border-gray-300 bg-[#f7f7f8]">
+              <div className="relative mx-auto h-[360px] w-full max-w-[700px] rounded-[999px] border border-gray-300 bg-[#f7f7f8]">
                 {gameState.players.map((pid, idx) => {
                   const n = gameState.players.length;
                   const angle = (-90 + (360 / n) * idx) * (Math.PI / 180);
@@ -320,7 +331,7 @@ export default function GamePage() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <section className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
                   {testMode ? `${displayName(playerId)} Hand` : 'Your Hand'}
@@ -331,15 +342,19 @@ export default function GamePage() {
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {groupedMyHand.map((group) => (
-                  <div key={group.suit} className="w-full">
-                    <div className="mb-1 text-xs font-medium text-gray-600">Suit {group.suit}</div>
-                    <div className="flex flex-wrap gap-2">
-                      {group.cards.map((card) => renderCard(card, true))}
+              <div className="overflow-x-auto">
+                <div className="flex min-w-max items-center gap-4 pb-1">
+                  {groupedMyHand.map((group) => (
+                    <div key={group.suit} className="inline-flex items-center gap-2">
+                      <span className="rounded-full border border-gray-300 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
+                        {group.suit}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {group.cards.map((card) => renderCard(card, true))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
               {isMyTurn && gameState.phase === 'playing' && (
                 <div className="mt-3">
@@ -362,7 +377,7 @@ export default function GamePage() {
               )}
             </section>
 
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <section className="max-h-60 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
               {gameState.phase === 'lobby' && (
                 <div className="space-y-3">
                   <h2 className="text-base font-semibold">Lobby</h2>
@@ -521,33 +536,28 @@ export default function GamePage() {
             )}
           </div>
 
-          <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-4 shadow-sm lg:sticky lg:top-4">
+          <aside className="h-full rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
             <h2 className="mb-3 text-base font-semibold">Leaderboard</h2>
-            <div className="space-y-2">
-              {gameState.players.map((pid) => {
-                const running = gameState.runningScores?.[pid] ?? 0;
-                const handScore = gameState.scores?.[pid] ?? 0;
-                const trickPoints = gameState.pointsWonByPlayer?.[pid] ?? 0;
-                const isBidder = gameState.bidderId === pid;
-                const isPartner = gameState.partnerPlayerIds.includes(pid);
-                return (
-                  <div key={pid} className="rounded-lg border border-gray-200 p-2 text-sm">
-                    <div className="font-medium">
-                      {displayName(pid)}
-                      {pid === playerId ? ' (You)' : ''}
+            {showLeaderboardTotals ? (
+              <div className="space-y-2">
+                {gameState.players.map((pid) => {
+                  const totalPoints = gameState.runningScores?.[pid] ?? gameState.scores?.[pid] ?? 0;
+                  return (
+                    <div key={pid} className="rounded-lg border border-gray-200 p-2 text-sm">
+                      <div className="font-medium">
+                        {displayName(pid)}
+                        {pid === playerId ? ' (You)' : ''}
+                      </div>
+                      <div className="text-xs text-gray-700">Total points: {totalPoints}</div>
                     </div>
-                    <div className="text-xs text-gray-700">
-                      Running: {running} • Hand: {handScore} • Trick points: {trickPoints}
-                    </div>
-                    <div className="mt-1 text-[11px] text-gray-700">
-                      {pid === gameState.hostId ? 'Host ' : ''}
-                      {isBidder ? 'Bidder ' : ''}
-                      {isPartner ? 'Partner Revealed' : ''}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 text-sm text-gray-600">
+                Total points appear here after all tricks are over.
+              </div>
+            )}
           </aside>
         </div>
       </div>
