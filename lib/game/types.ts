@@ -55,6 +55,7 @@ export interface Trick {
 
 export interface GameState {
   id: string;
+  gameCode?: string;
   createdAt: number;
   handNumber: number;
   players: PlayerId[];

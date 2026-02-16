@@ -167,6 +167,12 @@ export default function GamePage() {
   const trickJustEnded =
     !!currentTrick && !!currentTrick.winnerId && currentTrick.plays.length === gameState.players.length;
   const otherPlayers = gameState.players.filter((pid) => pid !== playerId);
+  const showActionPanel =
+    gameState.phase === 'lobby' ||
+    gameState.phase === 'bidding' ||
+    (gameState.phase === 'choose_trump_and_partners' && gameState.bidderId === playerId) ||
+    (gameState.phase === 'scoring' && gameState.bidderId === playerId) ||
+    (gameState.phase === 'finished' && isHost);
 
   const renderCard = (card: Card, clickable: boolean = false, compact = false) => {
     const suitColors: Record<string, string> = {
@@ -213,16 +219,17 @@ export default function GamePage() {
   };
 
   const showLeaderboardTotals = gameState.phase === 'finished';
+  const gameCodeDisplay = gameState.gameCode ?? gameId;
   return (
-    <div className="h-dvh overflow-hidden bg-[#141414] p-2 text-gray-100 lg:p-3">
+    <div className="h-dvh overflow-hidden bg-[#141414] p-1 text-gray-100 lg:p-2">
       <div className="mx-auto h-full max-w-7xl">
-        <div className="grid h-full gap-2 lg:grid-cols-[1fr_320px] lg:gap-3">
-          <div className="flex min-h-0 flex-col gap-2 lg:gap-3">
+        <div className="grid h-full gap-1.5 lg:grid-cols-[1fr_320px] lg:gap-2">
+          <div className="flex min-h-0 flex-col gap-1.5 lg:gap-2">
             <div className="rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <h1 className="text-lg font-semibold lg:text-xl">Game {gameId.slice(0, 8)} · Hand {gameState.handNumber ?? 1}</h1>
-                  <p className="text-sm text-gray-300">Code: {gameId}</p>
+                  <h1 className="text-lg font-semibold lg:text-xl">Game {gameCodeDisplay} · Hand {gameState.handNumber ?? 1}</h1>
+                  <p className="text-sm text-gray-300">Code: {gameCodeDisplay}</p>
                   <p className="text-sm text-gray-300">
                     {gameState.maxPlayers} players · {gameState.turnTimeSeconds}s turn · min bid {gameState.minimumBid}
                   </p>
@@ -277,15 +284,15 @@ export default function GamePage() {
               </div>
             )}
 
-            <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
-              <h2 className="mb-3 text-center text-base font-semibold text-gray-100">Table</h2>
+            <section className="rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2 shadow-sm lg:p-2.5">
+              <h2 className="mb-2 text-center text-base font-semibold text-gray-100">Table</h2>
 
-              <div className="relative mx-auto h-[290px] w-full max-w-[700px] rounded-[999px] border border-[#3a3a3a] bg-[radial-gradient(circle_at_50%_35%,#2f7a36_0%,#1e5b29_40%,#164421_75%,#12361c_100%)] sm:h-[320px] lg:h-[350px] xl:h-[390px]">
+              <div className="relative mx-auto h-[260px] w-full max-w-[700px] rounded-[999px] border border-[#3a3a3a] bg-[radial-gradient(circle_at_50%_35%,#2f7a36_0%,#1e5b29_40%,#164421_75%,#12361c_100%)] sm:h-[290px] lg:h-[320px] xl:h-[350px]">
                 {gameState.players.map((pid, idx) => {
                   const n = gameState.players.length;
                   const angle = (-90 + (360 / n) * idx) * (Math.PI / 180);
-                  const x = 50 + 42 * Math.cos(angle);
-                  const y = 50 + 42 * Math.sin(angle);
+                  const x = 50 + 41 * Math.cos(angle);
+                  const y = 50 + 41 * Math.sin(angle);
                   const isOpen = openSeatIds.includes(pid);
                   const isCurrent = gameState.currentPlayerId === pid;
                   return (
@@ -377,7 +384,8 @@ export default function GamePage() {
               )}
             </section>
 
-            <section className="max-h-52 overflow-y-auto rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:max-h-60 lg:p-3">
+            {showActionPanel && (
+            <section className="max-h-48 overflow-y-auto rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:max-h-52 lg:p-3">
               {gameState.phase === 'lobby' && (
                 <div className="space-y-3">
                   <h2 className="text-base font-semibold">Lobby</h2>
@@ -528,6 +536,7 @@ export default function GamePage() {
                 </button>
               )}
             </section>
+            )}
 
             {testMode && (
               <div className="rounded-xl border border-gray-600 bg-[#1f1f1f] p-3 text-sm text-gray-100">
@@ -538,24 +547,25 @@ export default function GamePage() {
 
           <aside className="h-full overflow-y-auto rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
             <h2 className="mb-3 text-base font-semibold">Leaderboard</h2>
-            {showLeaderboardTotals ? (
-              <div className="space-y-2">
-                {gameState.players.map((pid) => {
-                  const totalPoints = gameState.runningScores?.[pid] ?? gameState.scores?.[pid] ?? 0;
-                  return (
-                    <div key={pid} className="rounded-lg border border-gray-700 bg-[#111] p-2 text-sm">
-                      <div className="font-medium">
-                        {displayName(pid)}
-                        {pid === playerId ? ' (You)' : ''}
-                      </div>
-                      <div className="text-xs text-gray-300">Total points: {totalPoints}</div>
+            <div className="space-y-2">
+              {gameState.players.map((pid) => {
+                const totalPoints = gameState.runningScores?.[pid] ?? gameState.scores?.[pid] ?? 0;
+                return (
+                  <div key={pid} className="rounded-lg border border-gray-700 bg-[#111] p-2 text-sm">
+                    <div className="font-medium">
+                      {displayName(pid)}
+                      {pid === playerId ? ' (You)' : ''}
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-gray-700 bg-[#111] p-3 text-sm text-gray-300">
-                Total points appear here after all tricks are over.
+                    <div className="text-xs text-gray-300">
+                      Total points: {showLeaderboardTotals ? totalPoints : '—'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {!showLeaderboardTotals && (
+              <div className="mt-2 text-xs text-gray-400">
+                Totals update after the 10th trick is scored.
               </div>
             )}
           </aside>

@@ -7,6 +7,56 @@ function generateId(): string {
   return uuidv4();
 }
 
+function generateGameCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function getGameByIdentifier(identifier: string) {
+  const byId = await supabase
+    .from('games')
+    .select('*')
+    .eq('id', identifier)
+    .maybeSingle();
+
+  if (byId.data) {
+    return { data: byId.data, error: null };
+  }
+
+  const byCode = await supabase
+    .from('games')
+    .select('*')
+    .eq('current_state->>gameCode', identifier)
+    .maybeSingle();
+
+  if (byCode.data) {
+    return { data: byCode.data, error: null };
+  }
+
+  return { data: null, error: byCode.error ?? byId.error };
+}
+
+async function generateUniqueGameCode(): Promise<string> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const code = generateGameCode();
+    const { data, error } = await supabase
+      .from('games')
+      .select('id')
+      .eq('current_state->>gameCode', code)
+      .limit(1);
+
+    if (error) {
+      // If lookup fails, still proceed with a random code instead of blocking game creation.
+      return code;
+    }
+
+    if (!data || data.length === 0) {
+      return code;
+    }
+  }
+
+  return generateGameCode();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { hostId, numPlayers, username, turnTimeSeconds, minimumBid } = await request.json();
@@ -18,41 +68,66 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate UUIDs for all players (works with simplified schema)
-    const hostProfileId = generateId();
-    const playerProfileIds = [hostProfileId, ...Array(numPlayers - 1).fill(null).map(() => generateId())];
-    
-    // Create or update profile for host
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .upsert({
-        id: hostProfileId,
-        username: username || `Player-${hostProfileId.slice(0, 8)}`,
-      }, {
-        onConflict: 'id'
-      });
+    const hostUsername = typeof username === 'string' && username.trim()
+      ? username.trim()
+      : `Player-${(typeof hostId === 'string' ? hostId : generateId()).slice(0, 8)}`;
 
-    if (profileError) {
-      console.error('Profile creation error:', profileError);
+    // Reuse an existing profile by username when present.
+    // This avoids collisions when username is globally unique in the DB.
+    const { data: existingProfiles, error: existingProfileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', hostUsername)
+      .limit(1);
+
+    if (existingProfileError) {
       return NextResponse.json(
-        { 
-          error: 'Failed to create profile',
-          details: profileError.message || JSON.stringify(profileError),
-          code: profileError.code,
-          hint: profileError.code === '23503' 
-            ? 'Foreign key violation: Make sure you are using the simplified schema (supabase-schema-simple.sql) instead of the auth.users schema.'
-            : 'Make sure you ran the SQL schema correctly. Use supabase-schema-simple.sql for easier setup.'
+        {
+          error: 'Failed to look up existing profile',
+          details: existingProfileError.message || JSON.stringify(existingProfileError),
         },
         { status: 500 }
       );
     }
 
+    let hostProfileId = existingProfiles?.[0]?.id as string | undefined;
+
+    if (!hostProfileId) {
+      hostProfileId = generateId();
+      const { error: createProfileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: hostProfileId,
+          username: hostUsername,
+        });
+
+      if (createProfileError) {
+        console.error('Profile creation error:', createProfileError);
+        return NextResponse.json(
+          {
+            error: 'Failed to create profile',
+            details: createProfileError.message || JSON.stringify(createProfileError),
+            code: createProfileError.code,
+            hint: createProfileError.code === '23503'
+              ? 'Foreign key violation: Make sure you are using the simplified schema (supabase-schema-simple.sql) instead of the auth.users schema.'
+              : 'Make sure you ran the SQL schema correctly. Use supabase-schema-simple.sql for easier setup.'
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Generate UUIDs for all players (works with simplified schema)
+    const playerProfileIds = [hostProfileId, ...Array(numPlayers - 1).fill(null).map(() => generateId())];
+
     const gameId = generateId();
+    const gameCode = await generateUniqueGameCode();
     // Update gameState to use the new UUIDs
     const updatedPlayers = playerProfileIds;
     const gameState = createGame(updatedPlayers, gameId, {
       hostId: hostProfileId,
-      hostUsername: username,
+      hostUsername,
+      gameCode,
       maxPlayers: numPlayers,
       turnTimeSeconds,
       minimumBid,
@@ -61,7 +136,7 @@ export async function POST(request: NextRequest) {
     // Upsert all player profiles
     const profileInserts = playerProfileIds.map((pid: string, idx: number) => ({
       id: pid,
-      username: idx === 0 ? (username || `Player-${pid.slice(0, 8)}`) : `Player-${pid.slice(0, 8)}`,
+      username: idx === 0 ? hostUsername : `Player-${pid.slice(0, 8)}`,
     }));
 
     const { error: profilesError } = await supabase
@@ -122,6 +197,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       game: data,
+      gameCode,
       hostPlayerId: hostProfileId,
     });
   } catch (error: any) {
@@ -140,19 +216,15 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const gameId = searchParams.get('id');
+    const gameIdentifier = searchParams.get('id');
 
-    if (!gameId) {
+    if (!gameIdentifier) {
       return NextResponse.json({ error: 'Game ID required' }, { status: 400 });
     }
 
-    const { data, error } = await supabase
-      .from('games')
-      .select('*')
-      .eq('id', gameId)
-      .single();
+    const { data, error } = await getGameByIdentifier(gameIdentifier);
 
-    if (error) {
+    if (error || !data) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 

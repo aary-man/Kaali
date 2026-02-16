@@ -10,13 +10,37 @@ import {
   restartGame,
 } from '@/lib/game/gameState';
 
+async function getGameByIdentifier(identifier: string) {
+  const byId = await supabase
+    .from('games')
+    .select('id,current_state')
+    .eq('id', identifier)
+    .maybeSingle();
+
+  if (byId.data) {
+    return { data: byId.data, error: null };
+  }
+
+  const byCode = await supabase
+    .from('games')
+    .select('id,current_state')
+    .eq('current_state->>gameCode', identifier)
+    .maybeSingle();
+
+  if (byCode.data) {
+    return { data: byCode.data, error: null };
+  }
+
+  return { data: null, error: byCode.error ?? byId.error };
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: gameId } = await context.params;
-    if (!gameId) {
+    const { id: gameIdentifier } = await context.params;
+    if (!gameIdentifier) {
       return NextResponse.json(
         { error: 'Game ID is required', details: 'Missing id in URL' },
         { status: 400 }
@@ -25,18 +49,15 @@ export async function POST(
     const { action, playerId, ...actionData } = await request.json();
 
     // Fetch current game state
-    const { data: gameData, error: fetchError } = await supabase
-      .from('games')
-      .select('current_state')
-      .eq('id', gameId)
-      .single();
+    const { data: gameData, error: fetchError } = await getGameByIdentifier(gameIdentifier);
 
-    if (fetchError || !gameData) {
+    if (fetchError || !gameData || !gameData.id) {
       return NextResponse.json(
         { error: 'Game not found', details: fetchError?.message ?? 'No game data' },
         { status: 404 }
       );
     }
+    const resolvedGameId = gameData.id;
 
     let gameState: GameState = gameData.current_state;
     let updatedState: GameState;
@@ -63,6 +84,10 @@ export async function POST(
 
       case 'play_card':
         updatedState = playCard(gameState, playerId, actionData.cardId);
+        if (updatedState.phase === 'scoring') {
+          // Auto-finalize when the 10th trick ends so leaderboard updates immediately.
+          updatedState = calculateScores(updatedState);
+        }
         break;
 
       case 'calculate_scores':
@@ -100,7 +125,7 @@ export async function POST(
         status,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', gameId);
+      .eq('id', resolvedGameId);
 
     if (updateError) {
       console.error('Supabase update error:', updateError);
@@ -116,7 +141,7 @@ export async function POST(
         await supabase
           .from('game_players')
           .update({ score_total: score })
-          .eq('game_id', gameId)
+          .eq('game_id', resolvedGameId)
           .eq('player_id', playerId);
       }
     }

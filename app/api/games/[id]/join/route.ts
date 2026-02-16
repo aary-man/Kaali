@@ -36,28 +36,49 @@ function remapStringRecordKeys(record: Record<string, string>, oldId: PlayerId, 
   return Object.fromEntries(entries);
 }
 
+async function getGameByIdentifier(identifier: string) {
+  const byId = await supabase
+    .from('games')
+    .select('id,current_state')
+    .eq('id', identifier)
+    .maybeSingle();
+
+  if (byId.data) {
+    return { data: byId.data, error: null };
+  }
+
+  const byCode = await supabase
+    .from('games')
+    .select('id,current_state')
+    .eq('current_state->>gameCode', identifier)
+    .maybeSingle();
+
+  if (byCode.data) {
+    return { data: byCode.data, error: null };
+  }
+
+  return { data: null, error: byCode.error ?? byId.error };
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: gameId } = await context.params;
+    const { id: gameIdentifier } = await context.params;
     const body = await request.json();
     const requestedUsername = typeof body?.username === 'string' ? body.username.trim() : '';
 
-    if (!gameId) {
+    if (!gameIdentifier) {
       return NextResponse.json({ error: 'Game ID is required' }, { status: 400 });
     }
 
-    const { data: gameData, error: fetchError } = await supabase
-      .from('games')
-      .select('current_state')
-      .eq('id', gameId)
-      .single();
+    const { data: gameData, error: fetchError } = await getGameByIdentifier(gameIdentifier);
 
-    if (fetchError || !gameData?.current_state) {
+    if (fetchError || !gameData?.current_state || !gameData?.id) {
       return NextResponse.json({ error: 'Game not found', details: fetchError?.message }, { status: 404 });
     }
+    const resolvedGameId = gameData.id;
 
     const gameState = gameData.current_state as GameState;
     const openSeatIds = gameState.openSeatIds ?? [];
@@ -75,26 +96,45 @@ export async function POST(
     }
 
     const seatIdToClaim = openSeatIds[0];
-    const joinedPlayerId = uuidv4();
-    let username = requestedUsername || `Player-${joinedPlayerId.slice(0, 8)}`;
+    const fallbackId = uuidv4();
+    let joinedPlayerId = fallbackId;
+    let username = requestedUsername || `Player-${fallbackId.slice(0, 8)}`;
 
-    let { error: profileError } = await supabase
+    // Reuse profile by username if it already exists.
+    // This allows using the same username across multiple games.
+    const { data: existingProfiles, error: lookupError } = await supabase
       .from('profiles')
-      .upsert({ id: joinedPlayerId, username }, { onConflict: 'id' });
+      .select('id,username')
+      .eq('username', username)
+      .limit(1);
 
-    // Handle duplicate username with simple suffix retry.
-    if (profileError?.code === '23505') {
-      username = `${username}-${joinedPlayerId.slice(0, 4)}`;
-      const retry = await supabase
-        .from('profiles')
-        .upsert({ id: joinedPlayerId, username }, { onConflict: 'id' });
-      profileError = retry.error;
+    if (lookupError) {
+      return NextResponse.json(
+        { error: 'Failed to look up profile', details: lookupError.message },
+        { status: 500 }
+      );
     }
 
-    if (profileError) {
+    if (existingProfiles && existingProfiles.length > 0) {
+      joinedPlayerId = existingProfiles[0].id;
+      username = existingProfiles[0].username;
+    } else {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({ id: joinedPlayerId, username });
+
+      if (profileError) {
+        return NextResponse.json(
+          { error: 'Failed to create joining profile', details: profileError.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    if (gameState.players.includes(joinedPlayerId)) {
       return NextResponse.json(
-        { error: 'Failed to create joining profile', details: profileError.message },
-        { status: 500 }
+        { error: 'This username has already joined this game.' },
+        { status: 400 }
       );
     }
 
@@ -130,7 +170,7 @@ export async function POST(
     const { error: updateGameError } = await supabase
       .from('games')
       .update({ current_state: updatedState, updated_at: new Date().toISOString() })
-      .eq('id', gameId);
+      .eq('id', resolvedGameId);
 
     if (updateGameError) {
       return NextResponse.json(
@@ -142,7 +182,7 @@ export async function POST(
     const { error: updateSeatError } = await supabase
       .from('game_players')
       .update({ player_id: joinedPlayerId })
-      .eq('game_id', gameId)
+      .eq('game_id', resolvedGameId)
       .eq('player_id', seatIdToClaim);
 
     if (updateSeatError) {
@@ -153,7 +193,7 @@ export async function POST(
     }
 
     return NextResponse.json({
-      gameId,
+      gameId: updatedState.gameCode ?? resolvedGameId,
       playerId: joinedPlayerId,
       username,
       gameState: updatedState,

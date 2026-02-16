@@ -5,6 +5,7 @@ import { Bid, Card, GameState, PartnerCard, Phase, PlayerId, Trick } from './typ
 interface CreateGameOptions {
   hostId: PlayerId;
   hostUsername?: string;
+  gameCode?: string;
   maxPlayers?: number;
   turnTimeSeconds?: number;
   minimumBid?: number;
@@ -49,6 +50,7 @@ export function createGame(players: PlayerId[], gameId: string, options: CreateG
 
   return {
     id: gameId,
+    gameCode: options.gameCode,
     createdAt: Date.now(),
     handNumber: 1,
     players,

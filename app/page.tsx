@@ -53,7 +53,7 @@ export default function Home() {
       });
 
       const rawText = await res.text();
-      let data: { game?: { id: string }; hostPlayerId?: string; error?: string; details?: string; hint?: string } = {};
+      let data: { game?: { id: string }; gameCode?: string; hostPlayerId?: string; error?: string; details?: string; hint?: string } = {};
       try {
         data = rawText ? JSON.parse(rawText) : {};
       } catch {
@@ -74,7 +74,8 @@ export default function Home() {
         if (data.hostPlayerId) {
           localStorage.setItem('playerId', data.hostPlayerId);
         }
-        router.push(`/game/${data.game.id}`);
+        const roomCode = data.gameCode || data.game.id;
+        router.push(`/game/${roomCode}`);
       } else {
         alert('Unexpected response from server');
         console.error('Unexpected response:', data);
