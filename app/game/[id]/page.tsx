@@ -188,7 +188,7 @@ export default function GamePage() {
     return (
       <div
         key={card.id}
-        className={`relative rounded-xl border bg-white shadow-sm transition ${
+        className={`relative rounded-md border bg-white shadow-[0_1px_2px_rgba(0,0,0,0.35)] transition ${
           compact ? 'h-20 w-14 p-1.5' : 'h-28 w-18 p-2'
         } ${
           clickable && isMyTurn && isPlayable
@@ -196,7 +196,7 @@ export default function GamePage() {
             : clickable && isMyTurn && !isPlayable
             ? 'cursor-not-allowed opacity-45'
             : ''
-        } ${selectedCard === card.id ? 'border-black ring-2 ring-gray-300' : 'border-gray-200'}`}
+        } ${selectedCard === card.id ? 'border-black ring-2 ring-gray-400' : 'border-gray-300'}`}
         onClick={() => clickable && isMyTurn && isPlayable && setSelectedCard(card.id)}
       >
         <div className={`text-xs font-bold leading-none ${suitColors[card.suit]}`}>
@@ -214,30 +214,30 @@ export default function GamePage() {
 
   const showLeaderboardTotals = gameState.phase === 'finished';
   return (
-    <div className="h-screen overflow-hidden bg-[#f5f6f8] p-3 text-black">
+    <div className="h-dvh overflow-hidden bg-[#141414] p-2 text-gray-100 lg:p-3">
       <div className="mx-auto h-full max-w-7xl">
-        <div className="grid h-full gap-3 lg:grid-cols-[1fr_320px]">
-          <div className="flex min-h-0 flex-col gap-3">
-            <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="grid h-full gap-2 lg:grid-cols-[1fr_320px] lg:gap-3">
+          <div className="flex min-h-0 flex-col gap-2 lg:gap-3">
+            <div className="rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <h1 className="text-xl font-semibold">Game {gameId.slice(0, 8)} · Hand {gameState.handNumber ?? 1}</h1>
-                  <p className="text-sm text-gray-600">Code: {gameId}</p>
-                  <p className="text-sm text-gray-600">
+                  <h1 className="text-lg font-semibold lg:text-xl">Game {gameId.slice(0, 8)} · Hand {gameState.handNumber ?? 1}</h1>
+                  <p className="text-sm text-gray-300">Code: {gameId}</p>
+                  <p className="text-sm text-gray-300">
                     {gameState.maxPlayers} players · {gameState.turnTimeSeconds}s turn · min bid {gameState.minimumBid}
                   </p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-300">
                     Phase: <span className="font-medium uppercase">{gameState.phase}</span>
                     {gameState.trumpSuit ? ` • Trump ${gameState.trumpSuit}` : ''}
                     {gameState.winningBid ? ` • Bid ${gameState.winningBid.amount}` : ''}
                   </p>
                   {amSelectedPartner && !amRevealedPartner && (
-                    <p className="inline-block rounded-full border border-gray-300 bg-gray-100 px-3 py-1 text-xs font-medium">
+                    <p className="inline-block rounded-full border border-gray-600 bg-[#2a2a2a] px-3 py-1 text-xs font-medium text-gray-100">
                       You are a partner (hidden until you play the called card)
                     </p>
                   )}
                   {amRevealedPartner && (
-                    <p className="inline-block rounded-full border border-black bg-black px-3 py-1 text-xs font-medium text-white">
+                    <p className="inline-block rounded-full border border-white bg-white px-3 py-1 text-xs font-medium text-black">
                       You are a revealed partner
                     </p>
                   )}
@@ -246,7 +246,7 @@ export default function GamePage() {
                   <button
                     onClick={() => setTestMode(!testMode)}
                     className={`rounded-md px-3 py-1 text-sm font-semibold ${
-                      testMode ? 'bg-black text-white' : 'bg-gray-200 text-black'
+                      testMode ? 'bg-white text-black' : 'bg-[#2f2f2f] text-gray-100'
                     }`}
                   >
                     {testMode ? 'Test Mode ON' : 'Test Mode OFF'}
@@ -258,7 +258,7 @@ export default function GamePage() {
                         setPlayerId(e.target.value);
                         localStorage.setItem('playerId', e.target.value);
                       }}
-                      className="rounded-md border border-gray-400 bg-white px-2 py-1 text-sm text-black"
+                      className="rounded-md border border-gray-600 bg-[#111] px-2 py-1 text-sm text-gray-100"
                     >
                       {gameState.players.map((pid) => (
                         <option key={pid} value={pid}>
@@ -272,15 +272,15 @@ export default function GamePage() {
             </div>
 
             {trickJustEnded && currentTrick?.winnerId && (
-              <div className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm">
+              <div className="rounded-xl border border-[#2b2b2b] bg-[#1f1f1f] px-4 py-2 text-sm font-medium">
                 Trick ended: {displayName(currentTrick.winnerId)} won {currentTrick.points ?? 0} points.
               </div>
             )}
 
-            <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-              <h2 className="mb-3 text-center text-base font-semibold text-gray-800">Table</h2>
+            <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
+              <h2 className="mb-3 text-center text-base font-semibold text-gray-100">Table</h2>
 
-              <div className="relative mx-auto h-[360px] w-full max-w-[700px] rounded-[999px] border border-gray-300 bg-[#f7f7f8]">
+              <div className="relative mx-auto h-[290px] w-full max-w-[700px] rounded-[999px] border border-[#3a3a3a] bg-[radial-gradient(circle_at_50%_35%,#2f7a36_0%,#1e5b29_40%,#164421_75%,#12361c_100%)] sm:h-[320px] lg:h-[350px] xl:h-[390px]">
                 {gameState.players.map((pid, idx) => {
                   const n = gameState.players.length;
                   const angle = (-90 + (360 / n) * idx) * (Math.PI / 180);
@@ -292,7 +292,7 @@ export default function GamePage() {
                     <div
                       key={pid}
                       className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-2.5 py-1.5 text-xs shadow-sm ${
-                        isCurrent ? 'border-black bg-black text-white' : 'border-gray-300 bg-white text-black'
+                        isCurrent ? 'border-[#f0f0f0] bg-[#f0f0f0] text-black' : 'border-[#d8d8d8] bg-white text-black'
                       }`}
                       style={{ left: `${x}%`, top: `${y}%` }}
                     >
@@ -309,8 +309,8 @@ export default function GamePage() {
                   );
                 })}
 
-                <div className="absolute left-1/2 top-1/2 w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-gray-300 bg-white p-3 shadow-sm">
-                  <div className="mb-2 text-center text-xs text-gray-600">
+                <div className="absolute left-1/2 top-1/2 w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2f2f2f] bg-[#111111cc] p-3 shadow-sm backdrop-blur-sm">
+                  <div className="mb-2 text-center text-xs text-gray-200">
                     {lastCompletedTrick
                       ? `Last trick: ${displayName(lastCompletedTrick.winnerId || '')} won ${lastCompletedTrick.points ?? 0} pts`
                       : 'No completed tricks yet'}
@@ -320,24 +320,24 @@ export default function GamePage() {
                       trickInProgress.plays.map((play) => (
                         <div key={`${play.playerId}-${play.card.id}`} className="text-center">
                           {renderCard(play.card, false, true)}
-                          <div className="mt-1 text-[10px] text-gray-700">{displayName(play.playerId)}</div>
+                          <div className="mt-1 text-[10px] text-gray-100">{displayName(play.playerId)}</div>
                         </div>
                       ))
                     ) : (
-                      <div className="text-xs text-gray-600">No active trick yet</div>
+                      <div className="text-xs text-gray-300">No active trick yet</div>
                     )}
                   </div>
                 </div>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <section className="rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
               <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-200">
                   {testMode ? `${displayName(playerId)} Hand` : 'Your Hand'}
                 </h3>
                 {gameState.phase === 'playing' && (
-                  <span className={`rounded px-2 py-1 text-xs font-semibold ${isMyTurn ? 'bg-black text-white' : 'bg-gray-300 text-black'}`}>
+                  <span className={`rounded px-2 py-1 text-xs font-semibold ${isMyTurn ? 'bg-white text-black' : 'bg-[#2f2f2f] text-gray-100'}`}>
                     {isMyTurn ? 'Your Turn' : `Waiting for ${gameState.currentPlayerId ? displayName(gameState.currentPlayerId) : '-'}`}
                   </span>
                 )}
@@ -346,7 +346,7 @@ export default function GamePage() {
                 <div className="flex min-w-max items-center gap-4 pb-1">
                   {groupedMyHand.map((group) => (
                     <div key={group.suit} className="inline-flex items-center gap-2">
-                      <span className="rounded-full border border-gray-300 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
+                      <span className="rounded-full border border-gray-600 bg-[#2a2a2a] px-2 py-1 text-xs font-medium text-gray-100">
                         {group.suit}
                       </span>
                       <div className="flex items-center gap-2">
@@ -369,7 +369,7 @@ export default function GamePage() {
                       }
                     }}
                     disabled={!selectedCard}
-                    className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:bg-gray-400"
+                    className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black disabled:bg-gray-500 disabled:text-gray-200"
                   >
                     Play Selected Card
                   </button>
@@ -377,21 +377,21 @@ export default function GamePage() {
               )}
             </section>
 
-            <section className="max-h-60 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <section className="max-h-52 overflow-y-auto rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:max-h-60 lg:p-3">
               {gameState.phase === 'lobby' && (
                 <div className="space-y-3">
                   <h2 className="text-base font-semibold">Lobby</h2>
-                  <p className="text-sm">Joined: {joinedCount}/{gameState.maxPlayers}</p>
+                  <p className="text-sm text-gray-200">Joined: {joinedCount}/{gameState.maxPlayers}</p>
                   {isHost ? (
                     <button
                       onClick={() => sendAction('start_game', {})}
                       disabled={openSeatIds.length > 0}
-                      className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:bg-gray-400"
+                      className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black disabled:bg-gray-500 disabled:text-gray-200"
                     >
                       Start Game
                     </button>
                   ) : (
-                    <p className="text-sm text-gray-700">Waiting for host to start.</p>
+                    <p className="text-sm text-gray-300">Waiting for host to start.</p>
                   )}
                 </div>
               )}
@@ -409,7 +409,7 @@ export default function GamePage() {
                         onChange={(e) => setBidAmount(e.target.value === '' ? 0 : Number(e.target.value))}
                         min={currentHighBid ? currentHighBid + 5 : minBid}
                         step={5}
-                        className="w-full rounded-md border border-gray-400 bg-white px-3 py-2 text-black"
+                        className="w-full rounded-md border border-gray-600 bg-[#111] px-3 py-2 text-gray-100"
                         placeholder={`Min ${currentHighBid ? currentHighBid + 5 : minBid}`}
                       />
                       <div className="flex gap-2">
@@ -422,20 +422,20 @@ export default function GamePage() {
                             sendAction('bid', { amount: bidAmount });
                             setBidAmount(0);
                           }}
-                          className="flex-1 rounded-lg bg-black px-3 py-2 font-medium text-white"
+                          className="flex-1 rounded-lg bg-white px-3 py-2 font-medium text-black"
                         >
                           Bid
                         </button>
                         <button
                           onClick={() => sendAction('bid', { amount: null })}
-                          className="flex-1 rounded-lg bg-gray-600 px-3 py-2 font-medium text-white"
+                          className="flex-1 rounded-lg bg-[#2f2f2f] px-3 py-2 font-medium text-gray-100"
                         >
                           Pass
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-gray-700">Waiting for your turn…</p>
+                    <p className="text-gray-300">Waiting for your turn…</p>
                   )}
                 </div>
               )}
@@ -448,7 +448,7 @@ export default function GamePage() {
                     <select
                       value={trumpSuit}
                       onChange={(e) => setTrumpSuit(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black"
+                    className="w-full rounded-lg border border-gray-600 bg-[#111] px-3 py-2 text-gray-100"
                     >
                       <option value="">Select...</option>
                       <option value="♠">♠ Spades</option>
@@ -467,7 +467,7 @@ export default function GamePage() {
                             prev.map((p, idx) => (idx === i ? { ...p, suit: e.target.value as Suit | '' } : p))
                           )
                         }
-                        className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-black"
+                        className="rounded-lg border border-gray-600 bg-[#111] px-2 py-2 text-gray-100"
                       >
                         <option value="">Suit</option>
                         {suitOptions.map((suit) => (
@@ -483,7 +483,7 @@ export default function GamePage() {
                             prev.map((p, idx) => (idx === i ? { ...p, rank: e.target.value as Rank | '' } : p))
                           )
                         }
-                        className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-black"
+                        className="rounded-lg border border-gray-600 bg-[#111] px-2 py-2 text-gray-100"
                       >
                         <option value="">Rank</option>
                         {rankOptions.map((rank) => (
@@ -503,7 +503,7 @@ export default function GamePage() {
                       })
                     }
                     disabled={!trumpSuit || !partnerSelectionValid}
-                    className="w-full rounded-lg bg-black px-3 py-2 font-medium text-white disabled:bg-gray-400"
+                    className="w-full rounded-lg bg-white px-3 py-2 font-medium text-black disabled:bg-gray-500 disabled:text-gray-200"
                   >
                     Confirm Trump & Partners
                   </button>
@@ -513,7 +513,7 @@ export default function GamePage() {
               {gameState.phase === 'scoring' && gameState.bidderId === playerId && (
                 <button
                   onClick={() => sendAction('calculate_scores', {})}
-                  className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white"
+                  className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black"
                 >
                   Calculate Scores
                 </button>
@@ -522,7 +522,7 @@ export default function GamePage() {
               {gameState.phase === 'finished' && isHost && (
                 <button
                   onClick={() => sendAction('restart_game', {})}
-                  className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white"
+                  className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black"
                 >
                   Restart (New Hand)
                 </button>
@@ -530,31 +530,31 @@ export default function GamePage() {
             </section>
 
             {testMode && (
-              <div className="rounded-xl border border-gray-400 bg-gray-100 p-3 text-sm">
+              <div className="rounded-xl border border-gray-600 bg-[#1f1f1f] p-3 text-sm text-gray-100">
                 <strong>Test Mode:</strong> You can switch active player from header.
               </div>
             )}
           </div>
 
-          <aside className="h-full rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+          <aside className="h-full overflow-y-auto rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
             <h2 className="mb-3 text-base font-semibold">Leaderboard</h2>
             {showLeaderboardTotals ? (
               <div className="space-y-2">
                 {gameState.players.map((pid) => {
                   const totalPoints = gameState.runningScores?.[pid] ?? gameState.scores?.[pid] ?? 0;
                   return (
-                    <div key={pid} className="rounded-lg border border-gray-200 p-2 text-sm">
+                    <div key={pid} className="rounded-lg border border-gray-700 bg-[#111] p-2 text-sm">
                       <div className="font-medium">
                         {displayName(pid)}
                         {pid === playerId ? ' (You)' : ''}
                       </div>
-                      <div className="text-xs text-gray-700">Total points: {totalPoints}</div>
+                      <div className="text-xs text-gray-300">Total points: {totalPoints}</div>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 text-sm text-gray-600">
+              <div className="rounded-lg border border-dashed border-gray-700 bg-[#111] p-3 text-sm text-gray-300">
                 Total points appear here after all tricks are over.
               </div>
             )}
