@@ -82,7 +82,7 @@ export function buildDeckForPlayers(players: number, rng: () => number = Math.ra
         newDeck.push(card);
         continue;
       }
-      if (card.rank === rank && card.rank !== '5') {
+      if (card.rank === rank) {
         remaining--;
         // drop card
       } else {

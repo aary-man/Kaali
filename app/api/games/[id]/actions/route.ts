@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase/client';
+import { GameState } from '@/lib/game/types';
 import {
   addBid,
   setTrumpAndPartners,
@@ -7,7 +8,6 @@ import {
   calculateScores,
   startGame,
   restartGame,
-  GameState,
 } from '@/lib/game/gameState';
 
 export async function POST(
