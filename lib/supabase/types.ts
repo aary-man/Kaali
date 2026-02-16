@@ -54,6 +54,7 @@ export interface Database {
           player_id: string;
           seat_index: number;
           score_total: number;
+          auth_user_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -62,6 +63,7 @@ export interface Database {
           player_id: string;
           seat_index: number;
           score_total?: number;
+          auth_user_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -70,6 +72,60 @@ export interface Database {
           player_id?: string;
           seat_index?: number;
           score_total?: number;
+          auth_user_id?: string | null;
+          created_at?: string;
+        };
+      };
+      user_game_history: {
+        Row: {
+          id: string;
+          auth_user_id: string;
+          game_id: string;
+          game_code: string | null;
+          hand_number: number;
+          player_id: string;
+          player_name: string | null;
+          bid_amount: number | null;
+          score_delta: number;
+          running_total: number;
+          trick_points_won: number;
+          is_bidder: boolean;
+          is_partner: boolean;
+          did_win: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          auth_user_id: string;
+          game_id: string;
+          game_code?: string | null;
+          hand_number?: number;
+          player_id: string;
+          player_name?: string | null;
+          bid_amount?: number | null;
+          score_delta?: number;
+          running_total?: number;
+          trick_points_won?: number;
+          is_bidder?: boolean;
+          is_partner?: boolean;
+          did_win?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          auth_user_id?: string;
+          game_id?: string;
+          game_code?: string | null;
+          hand_number?: number;
+          player_id?: string;
+          player_name?: string | null;
+          bid_amount?: number | null;
+          score_delta?: number;
+          running_total?: number;
+          trick_points_won?: number;
+          is_bidder?: boolean;
+          is_partner?: boolean;
+          did_win?: boolean;
           created_at?: string;
         };
       };

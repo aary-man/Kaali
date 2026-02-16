@@ -7,6 +7,10 @@ function generateId(): string {
   return uuidv4();
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function generateGameCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -59,9 +63,11 @@ async function generateUniqueGameCode(): Promise<string> {
 
 export async function POST(request: NextRequest) {
   try {
-    const { hostId, numPlayers, username, turnTimeSeconds, minimumBid } = await request.json();
+    const { hostId, numPlayers, username, turnTimeSeconds, minimumBid, authUserId } = await request.json();
+    const normalizedAuthUserId = typeof authUserId === 'string' ? authUserId.trim() : '';
+    const hasAuthUser = isUuid(normalizedAuthUserId);
 
-    if (!hostId || !numPlayers || numPlayers < 5 || numPlayers > 7) {
+    if ((!hostId && !hasAuthUser) || !numPlayers || numPlayers < 5 || numPlayers > 7) {
       return NextResponse.json(
         { error: 'Invalid request. Need 5-7 players.' },
         { status: 400 }
@@ -72,49 +78,87 @@ export async function POST(request: NextRequest) {
       ? username.trim()
       : `Player-${(typeof hostId === 'string' ? hostId : generateId()).slice(0, 8)}`;
 
-    // Reuse an existing profile by username when present.
-    // This avoids collisions when username is globally unique in the DB.
-    const { data: existingProfiles, error: existingProfileError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('username', hostUsername)
-      .limit(1);
+    let hostProfileId: string | undefined;
 
-    if (existingProfileError) {
-      return NextResponse.json(
-        {
-          error: 'Failed to look up existing profile',
-          details: existingProfileError.message || JSON.stringify(existingProfileError),
-        },
-        { status: 500 }
-      );
-    }
-
-    let hostProfileId = existingProfiles?.[0]?.id as string | undefined;
-
-    if (!hostProfileId) {
-      hostProfileId = generateId();
-      const { error: createProfileError } = await supabase
+    if (hasAuthUser) {
+      hostProfileId = normalizedAuthUserId;
+      let profileUsername = hostUsername;
+      const profileResult = await supabase
         .from('profiles')
-        .insert({
-          id: hostProfileId,
-          username: hostUsername,
-        });
+        .upsert(
+          {
+            id: hostProfileId,
+            username: profileUsername,
+          },
+          { onConflict: 'id' }
+        );
 
-      if (createProfileError) {
-        console.error('Profile creation error:', createProfileError);
+      let profileError = profileResult.error;
+      if (profileError?.code === '23505') {
+        profileUsername = `${hostUsername}-${hostProfileId.slice(-4)}`;
+        const retry = await supabase
+          .from('profiles')
+          .upsert({ id: hostProfileId, username: profileUsername }, { onConflict: 'id' });
+        profileError = retry.error;
+      }
+
+      if (profileError) {
         return NextResponse.json(
           {
-            error: 'Failed to create profile',
-            details: createProfileError.message || JSON.stringify(createProfileError),
-            code: createProfileError.code,
-            hint: createProfileError.code === '23503'
-              ? 'Foreign key violation: Make sure you are using the simplified schema (supabase-schema-simple.sql) instead of the auth.users schema.'
-              : 'Make sure you ran the SQL schema correctly. Use supabase-schema-simple.sql for easier setup.'
+            error: 'Failed to create OAuth profile',
+            details: profileError.message || JSON.stringify(profileError),
           },
           { status: 500 }
         );
       }
+    } else {
+      // Guest mode fallback: reuse existing profile by username when present.
+      const { data: existingProfiles, error: existingProfileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', hostUsername)
+        .limit(1);
+
+      if (existingProfileError) {
+        return NextResponse.json(
+          {
+            error: 'Failed to look up existing profile',
+            details: existingProfileError.message || JSON.stringify(existingProfileError),
+          },
+          { status: 500 }
+        );
+      }
+
+      hostProfileId = existingProfiles?.[0]?.id as string | undefined;
+
+      if (!hostProfileId) {
+        hostProfileId = generateId();
+        const { error: createProfileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: hostProfileId,
+            username: hostUsername,
+          });
+
+        if (createProfileError) {
+          console.error('Profile creation error:', createProfileError);
+          return NextResponse.json(
+            {
+              error: 'Failed to create profile',
+              details: createProfileError.message || JSON.stringify(createProfileError),
+              code: createProfileError.code,
+              hint: createProfileError.code === '23503'
+                ? 'Foreign key violation: Make sure you are using the simplified schema (supabase-schema-simple.sql) instead of the auth.users schema.'
+                : 'Make sure you ran the SQL schema correctly. Use supabase-schema-simple.sql for easier setup.'
+            },
+            { status: 500 }
+          );
+        }
+      }
+    }
+
+    if (!hostProfileId) {
+      return NextResponse.json({ error: 'Failed to resolve host profile id' }, { status: 500 });
     }
 
     // Generate UUIDs for all players (works with simplified schema)
@@ -184,6 +228,7 @@ export async function POST(request: NextRequest) {
       player_id: playerId,
       seat_index: index,
       score_total: 0,
+      auth_user_id: index === 0 && hasAuthUser ? normalizedAuthUserId : null,
     }));
 
     const { error: playersError } = await supabase

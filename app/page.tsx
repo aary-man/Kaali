@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase/client';
 
 export default function Home() {
   const [username, setUsername] = useState('');
@@ -10,9 +13,86 @@ export default function Home() {
   const [turnTimeSeconds, setTurnTimeSeconds] = useState<number>(30);
   const [minimumBid, setMinimumBid] = useState<number>(75);
   const [isCreating, setIsCreating] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isAuthBusy, setIsAuthBusy] = useState(false);
   const router = useRouter();
 
   const minimumAllowedBid = numPlayers === 5 ? 75 : 150;
+
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setSession(data.session);
+      setIsAuthLoading(false);
+
+      const suggestedName =
+        data.session?.user?.user_metadata?.full_name ||
+        data.session?.user?.user_metadata?.name ||
+        data.session?.user?.email?.split('@')[0] ||
+        '';
+      if (suggestedName && !username.trim()) {
+        setUsername(String(suggestedName));
+      }
+    };
+
+    void initializeSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      const suggestedName =
+        nextSession?.user?.user_metadata?.full_name ||
+        nextSession?.user?.user_metadata?.name ||
+        nextSession?.user?.email?.split('@')[0] ||
+        '';
+      if (suggestedName && !username.trim()) {
+        setUsername(String(suggestedName));
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [username]);
+
+  const handleGoogleSignIn = async () => {
+    setIsAuthBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) {
+        alert(`Google sign-in failed: ${error.message}`);
+      }
+    } catch (error) {
+      alert(`Google sign-in failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setIsAuthBusy(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        alert(`Sign out failed: ${error.message}`);
+      }
+    } catch (error) {
+      alert(`Sign out failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsAuthBusy(false);
+    }
+  };
 
   const handleCreateGame = async () => {
     if (!username.trim()) {
@@ -49,6 +129,7 @@ export default function Home() {
           username,
           turnTimeSeconds,
           minimumBid,
+          authUserId: session?.user?.id ?? null,
         }),
       });
 
@@ -103,7 +184,10 @@ export default function Home() {
         const res = await fetch(`/api/games/${gameCode}/join`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username }),
+          body: JSON.stringify({
+            username,
+            authUserId: session?.user?.id ?? null,
+          }),
         });
 
         const rawText = await res.text();
@@ -137,6 +221,45 @@ export default function Home() {
         <h1 className="mb-6 text-center text-3xl font-bold text-black">
           Kaali ki Raani
         </h1>
+
+        <div className="mb-6 rounded-md border border-gray-200 p-4">
+          <h2 className="mb-2 text-sm font-semibold text-black">Account</h2>
+          {isAuthLoading ? (
+            <p className="text-sm text-gray-700">Checking login status...</p>
+          ) : session?.user ? (
+            <div className="space-y-2">
+              <p className="text-sm text-black">
+                Signed in as <span className="font-medium">{session.user.email ?? 'Google user'}</span>
+              </p>
+              <p className="text-xs text-gray-600">Use the dedicated /history page to view your full analytics dashboard.</p>
+              <Link
+                href="/history"
+                className="block w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-center text-sm font-semibold text-black transition-colors hover:bg-gray-50"
+              >
+                Open History Dashboard
+              </Link>
+              <button
+                onClick={handleSignOut}
+                disabled={isAuthBusy}
+                className="w-full rounded-md bg-gray-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-900 disabled:bg-gray-400"
+              >
+                {isAuthBusy ? 'Signing out...' : 'Sign Out'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-700">Sign in with Google to unlock game history and stats.</p>
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={isAuthBusy}
+                className="w-full rounded-md bg-black px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-gray-900 disabled:bg-gray-400"
+              >
+                {isAuthBusy ? 'Redirecting...' : 'Continue with Google'}
+              </button>
+              <p className="text-xs text-gray-600">You can still create/join games as a guest without signing in.</p>
+            </div>
+          )}
+        </div>
 
         <div className="mb-6">
           <label className="mb-2 block text-sm font-medium text-black">

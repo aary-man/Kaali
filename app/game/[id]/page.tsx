@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { GameState, Card, Rank, Suit } from '@/lib/game/types';
@@ -250,6 +251,12 @@ export default function GamePage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Link
+                    href="/history"
+                    className="rounded-md border border-gray-500 bg-[#111] px-3 py-1 text-sm font-semibold text-gray-100 hover:bg-[#1a1a1a]"
+                  >
+                    Dashboard
+                  </Link>
                   <button
                     onClick={() => setTestMode(!testMode)}
                     className={`rounded-md px-3 py-1 text-sm font-semibold ${
@@ -298,16 +305,16 @@ export default function GamePage() {
                   return (
                     <div
                       key={pid}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-2.5 py-1.5 text-xs shadow-sm ${
+                      className={`absolute flex h-[52px] w-[152px] -translate-x-1/2 -translate-y-1/2 flex-col justify-center rounded-full border px-2.5 py-1.5 text-xs shadow-sm ${
                         isCurrent ? 'border-[#f0f0f0] bg-[#f0f0f0] text-black' : 'border-[#d8d8d8] bg-white text-black'
                       }`}
                       style={{ left: `${x}%`, top: `${y}%` }}
                     >
-                      <div className="font-medium">
+                      <div className="truncate text-center font-medium">
                         {isOpen ? 'Open Seat' : displayName(pid)}
                       </div>
-                      <div className="text-[10px] opacity-80">
-                        {isOpen ? '' : `${gameState.hands[pid]?.length ?? 0} cards`}
+                      <div className="truncate text-center text-[10px] opacity-80">
+                        {isOpen ? 'Waiting for player' : `${gameState.hands[pid]?.length ?? 0} cards`}
                         {pid === gameState.hostId ? ' • Host' : ''}
                         {pid === gameState.bidderId ? ' • Bidder' : ''}
                         {gameState.partnerPlayerIds.includes(pid) ? ' • Partner' : ''}
@@ -545,9 +552,9 @@ export default function GamePage() {
             )}
           </div>
 
-          <aside className="h-full overflow-y-auto rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
+          <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
             <h2 className="mb-3 text-base font-semibold">Leaderboard</h2>
-            <div className="space-y-2">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {gameState.players.map((pid) => {
                 const totalPoints = gameState.runningScores?.[pid] ?? gameState.scores?.[pid] ?? 0;
                 return (

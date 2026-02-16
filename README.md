@@ -37,8 +37,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ### 3. Set Up Database Schema
 
 1. Go to your Supabase project SQL Editor
-2. Copy and paste the contents of `supabase-schema.sql`
+2. Copy and paste the contents of `supabase-schema.sql` (or `supabase-schema-simple.sql` for demo mode)
 3. Run the SQL script to create all tables, indexes, and RLS policies
+4. For OAuth history/stats, also run `supabase-history-schema.sql`
 
 ### 4. Run the Development Server
 

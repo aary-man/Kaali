@@ -34,6 +34,58 @@ async function getGameByIdentifier(identifier: string) {
   return { data: null, error: byCode.error ?? byId.error };
 }
 
+async function persistUserHistoryRows(gameId: string, gameState: GameState) {
+  if (gameState.phase !== 'finished' || !gameState.scores) return;
+
+  const { data: gamePlayers, error: gamePlayersError } = await supabase
+    .from('game_players')
+    .select('player_id,auth_user_id')
+    .eq('game_id', gameId);
+
+  if (gamePlayersError || !gamePlayers) {
+    console.error('Failed to fetch game_players for history:', gamePlayersError);
+    return;
+  }
+
+  const historyRows = gamePlayers
+    .filter((gp) => !!gp.auth_user_id)
+    .map((gp) => {
+      const pid = gp.player_id as string;
+      const authUid = gp.auth_user_id as string;
+      const scoreDelta = gameState.scores?.[pid] ?? 0;
+      const runningTotal = gameState.runningScores?.[pid] ?? scoreDelta;
+      const trickPoints = gameState.pointsWonByPlayer?.[pid] ?? 0;
+      return {
+        auth_user_id: authUid,
+        game_id: gameId,
+        game_code: gameState.gameCode ?? null,
+        hand_number: gameState.handNumber ?? 1,
+        player_id: pid,
+        player_name: gameState.playerNames?.[pid] ?? `Player ${pid.slice(-4)}`,
+        bid_amount: gameState.winningBid?.amount ?? null,
+        score_delta: scoreDelta,
+        running_total: runningTotal,
+        trick_points_won: trickPoints,
+        is_bidder: gameState.bidderId === pid,
+        is_partner: gameState.partnerPlayerIds.includes(pid),
+        did_win: scoreDelta > 0,
+      };
+    });
+
+  if (historyRows.length === 0) return;
+
+  const { error: historyInsertError } = await supabase
+    .from('user_game_history')
+    .upsert(historyRows, {
+      onConflict: 'auth_user_id,game_id,hand_number,player_id',
+    });
+
+  if (historyInsertError) {
+    // Do not fail gameplay if analytics schema isn't set up yet.
+    console.error('Failed to persist user game history:', historyInsertError);
+  }
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -144,6 +196,8 @@ export async function POST(
           .eq('game_id', resolvedGameId)
           .eq('player_id', playerId);
       }
+
+      await persistUserHistoryRows(resolvedGameId, updatedState);
     }
 
     return NextResponse.json({ gameState: updatedState });

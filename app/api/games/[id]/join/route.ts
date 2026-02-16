@@ -36,6 +36,10 @@ function remapStringRecordKeys(record: Record<string, string>, oldId: PlayerId, 
   return Object.fromEntries(entries);
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 async function getGameByIdentifier(identifier: string) {
   const byId = await supabase
     .from('games')
@@ -68,6 +72,8 @@ export async function POST(
     const { id: gameIdentifier } = await context.params;
     const body = await request.json();
     const requestedUsername = typeof body?.username === 'string' ? body.username.trim() : '';
+    const normalizedAuthUserId = typeof body?.authUserId === 'string' ? body.authUserId.trim() : '';
+    const hasAuthUser = isUuid(normalizedAuthUserId);
 
     if (!gameIdentifier) {
       return NextResponse.json({ error: 'Game ID is required' }, { status: 400 });
@@ -97,37 +103,60 @@ export async function POST(
 
     const seatIdToClaim = openSeatIds[0];
     const fallbackId = uuidv4();
-    let joinedPlayerId = fallbackId;
+    let joinedPlayerId = hasAuthUser ? normalizedAuthUserId : fallbackId;
     let username = requestedUsername || `Player-${fallbackId.slice(0, 8)}`;
 
-    // Reuse profile by username if it already exists.
-    // This allows using the same username across multiple games.
-    const { data: existingProfiles, error: lookupError } = await supabase
-      .from('profiles')
-      .select('id,username')
-      .eq('username', username)
-      .limit(1);
-
-    if (lookupError) {
-      return NextResponse.json(
-        { error: 'Failed to look up profile', details: lookupError.message },
-        { status: 500 }
-      );
-    }
-
-    if (existingProfiles && existingProfiles.length > 0) {
-      joinedPlayerId = existingProfiles[0].id;
-      username = existingProfiles[0].username;
-    } else {
-      const { error: profileError } = await supabase
+    if (hasAuthUser) {
+      let profileUsername = username;
+      const upsertResult = await supabase
         .from('profiles')
-        .insert({ id: joinedPlayerId, username });
+        .upsert({ id: joinedPlayerId, username: profileUsername }, { onConflict: 'id' });
+
+      let profileError = upsertResult.error;
+      if (profileError?.code === '23505') {
+        profileUsername = `${username}-${joinedPlayerId.slice(-4)}`;
+        const retry = await supabase
+          .from('profiles')
+          .upsert({ id: joinedPlayerId, username: profileUsername }, { onConflict: 'id' });
+        profileError = retry.error;
+      }
 
       if (profileError) {
         return NextResponse.json(
-          { error: 'Failed to create joining profile', details: profileError.message },
+          { error: 'Failed to create joining OAuth profile', details: profileError.message },
           { status: 500 }
         );
+      }
+      username = profileUsername;
+    } else {
+      // Guest mode fallback: resolve by username.
+      const { data: existingProfiles, error: lookupError } = await supabase
+        .from('profiles')
+        .select('id,username')
+        .eq('username', username)
+        .limit(1);
+
+      if (lookupError) {
+        return NextResponse.json(
+          { error: 'Failed to look up profile', details: lookupError.message },
+          { status: 500 }
+        );
+      }
+
+      if (existingProfiles && existingProfiles.length > 0) {
+        joinedPlayerId = existingProfiles[0].id;
+        username = existingProfiles[0].username;
+      } else {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({ id: joinedPlayerId, username });
+
+        if (profileError) {
+          return NextResponse.json(
+            { error: 'Failed to create joining profile', details: profileError.message },
+            { status: 500 }
+          );
+        }
       }
     }
 
@@ -181,7 +210,7 @@ export async function POST(
 
     const { error: updateSeatError } = await supabase
       .from('game_players')
-      .update({ player_id: joinedPlayerId })
+      .update({ player_id: joinedPlayerId, auth_user_id: hasAuthUser ? normalizedAuthUserId : null })
       .eq('game_id', resolvedGameId)
       .eq('player_id', seatIdToClaim);
 
