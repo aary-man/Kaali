@@ -1,4 +1,4 @@
--- Simplified Supabase Database Schema for Card Partner Game (without auth requirement)
+-- Simplified Supabase Database Schema for Kaali ki Raani (without auth requirement)
 -- Run this in your Supabase SQL Editor if you want to test without authentication
 
 -- Enable UUID extension

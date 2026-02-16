@@ -1,4 +1,4 @@
-# Card Partner Game
+# Kaali ki Raani
 
 An online multiplayer card game built with Next.js, React, Tailwind CSS, and Supabase.
 

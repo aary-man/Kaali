@@ -156,7 +156,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ game: data });
+    // Backward compatibility: hydrate player names for older game states
+    // that were created before playerNames was added.
+    const gameState = data.current_state ?? {};
+    const players: string[] = Array.isArray(gameState.players) ? gameState.players : [];
+    const existingNames: Record<string, string> = gameState.playerNames ?? {};
+    const missingPlayerIds = players.filter((pid) => !existingNames[pid]);
+
+    let hydratedNames: Record<string, string> = { ...existingNames };
+    if (missingPlayerIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id,username')
+        .in('id', players);
+
+      const profileById = new Map((profiles ?? []).map((p) => [p.id, p.username]));
+      for (const pid of players) {
+        if (!hydratedNames[pid]) {
+          hydratedNames[pid] = profileById.get(pid) ?? `Player ${pid.slice(-4)}`;
+        }
+      }
+    }
+
+    return NextResponse.json({
+      game: {
+        ...data,
+        current_state: {
+          ...gameState,
+          playerNames: hydratedNames,
+        },
+      },
+    });
   } catch (error) {
     console.error('Error fetching game:', error);
     return NextResponse.json(

@@ -1,4 +1,4 @@
--- Supabase Database Schema for Card Partner Game
+-- Supabase Database Schema for Kaali ki Raani
 -- Run this in your Supabase SQL Editor: https://app.supabase.com/project/_/sql
 
 -- Enable UUID extension

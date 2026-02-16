@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Card Partner Game",
-  description: "Play the card partner game online with friends",
+  title: "Kaali ki Raani",
+  description: "Play Kaali ki Raani online with friends",
 };
 
 export default function RootLayout({
