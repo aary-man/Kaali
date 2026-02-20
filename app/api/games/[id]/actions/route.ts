@@ -8,6 +8,7 @@ import {
   calculateScores,
   startGame,
   restartGame,
+  claimSeat,
 } from '@/lib/game/gameState';
 
 async function getGameByIdentifier(identifier: string) {
@@ -148,6 +149,10 @@ export async function POST(
 
       case 'restart_game':
         updatedState = restartGame(gameState, playerId);
+        break;
+
+      case 'claim_seat':
+        updatedState = claimSeat(gameState, playerId, actionData.seatId);
         break;
 
         default:

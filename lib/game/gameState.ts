@@ -142,6 +142,40 @@ export function restartGame(state: GameState, playerId: PlayerId): GameState {
   };
 }
 
+export function claimSeat(state: GameState, playerId: PlayerId, seatId: PlayerId): GameState {
+  if (state.phase !== 'lobby') {
+    throw new Error('Can only change seat in lobby');
+  }
+  const openSeatIds = state.openSeatIds ?? [];
+  if (!openSeatIds.includes(seatId)) {
+    throw new Error('That seat is not available');
+  }
+  if (!state.players.includes(playerId)) {
+    throw new Error('You are not in this game');
+  }
+  if (!state.players.includes(seatId)) {
+    throw new Error('Invalid seat');
+  }
+  const myIndex = state.players.indexOf(playerId);
+  const openIndex = state.players.indexOf(seatId);
+  if (myIndex === -1 || openIndex === -1) {
+    throw new Error('Seat not found');
+  }
+  // Swap: our old position gets the placeholder (seatId), the open position gets us (playerId).
+  const updatedPlayers = state.players.map((pid, i) =>
+    i === myIndex ? seatId : i === openIndex ? playerId : pid
+  );
+  // Open seats: we take seatId (remove), and the seat we left now has id seatId (add back). Set unchanged.
+  const updatedOpenSeatIds = openSeatIds.filter((s) => s !== seatId).concat(seatId);
+
+  return {
+    ...state,
+    players: updatedPlayers,
+    openSeatIds: updatedOpenSeatIds,
+    hostId: state.hostId === seatId ? playerId : state.hostId,
+  };
+}
+
 export function addBid(state: GameState, playerId: PlayerId, amount: number | null): GameState {
   if (state.phase !== 'bidding') {
     throw new Error('Game is not in bidding phase');

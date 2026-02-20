@@ -74,6 +74,7 @@ export async function POST(
     const requestedUsername = typeof body?.username === 'string' ? body.username.trim() : '';
     const normalizedAuthUserId = typeof body?.authUserId === 'string' ? body.authUserId.trim() : '';
     const hasAuthUser = isUuid(normalizedAuthUserId);
+    const requestedSeatId = typeof body?.seatId === 'string' ? body.seatId.trim() : '';
 
     if (!gameIdentifier) {
       return NextResponse.json({ error: 'Game ID is required' }, { status: 400 });
@@ -101,7 +102,10 @@ export async function POST(
       );
     }
 
-    const seatIdToClaim = openSeatIds[0];
+    const seatIdToClaim =
+      requestedSeatId && openSeatIds.includes(requestedSeatId)
+        ? requestedSeatId
+        : openSeatIds[0];
     const fallbackId = uuidv4();
     let joinedPlayerId = hasAuthUser ? normalizedAuthUserId : fallbackId;
     let username = requestedUsername || `Player-${fallbackId.slice(0, 8)}`;

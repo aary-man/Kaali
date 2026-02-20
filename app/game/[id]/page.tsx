@@ -22,11 +22,17 @@ export default function GamePage() {
     { rank: '', suit: '' },
   ]);
   const [testMode, setTestMode] = useState(false);
+  const [joinUsername, setJoinUsername] = useState('');
+  const [joiningSeatId, setJoiningSeatId] = useState<string | null>(null);
 
   useEffect(() => {
     const storedPlayerId = localStorage.getItem('playerId');
     if (storedPlayerId) {
       setPlayerId(storedPlayerId);
+    }
+    const storedUsername = localStorage.getItem('username');
+    if (storedUsername) {
+      setJoinUsername(storedUsername);
     }
 
     // Fetch game state
@@ -37,13 +43,7 @@ export default function GamePage() {
     return () => clearInterval(interval);
   }, [gameId]);
 
-  // Update playerId when gameState loads (for test mode)
-  useEffect(() => {
-    if (gameState && gameState.players.length > 0 && !playerId) {
-      // Use first player if no playerId set
-      setPlayerId(gameState.players[0]);
-    }
-  }, [gameState]);
+// Don't auto-assign playerId so users can choose a seat (join view when not in game)
 
   useEffect(() => {
     if (gameState?.phase === 'choose_trump_and_partners') {
@@ -109,9 +109,154 @@ export default function GamePage() {
     }
   };
 
-  if (!gameState || !playerId) {
+  const handleJoinSeat = async (seatId: string) => {
+    const username = joinUsername.trim() || undefined;
+    if (!username) {
+      alert('Please enter your name first.');
+      return;
+    }
+    if (!gameId || gameId === 'undefined') {
+      alert('Invalid game.');
+      return;
+    }
+    setJoiningSeatId(seatId);
+    try {
+      const res = await fetch(`/api/games/${gameId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, seatId }),
+      });
+      const rawText = await res.text();
+      let data: { playerId?: string; error?: string; details?: string } = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        alert(`Join failed (${res.status}): ${rawText?.slice(0, 150) || 'Empty response'}`);
+        return;
+      }
+      if (!res.ok || !data.playerId) {
+        const errorMsg = typeof data.error === 'string' ? data.error : 'Failed to join game';
+        const details = typeof data.details === 'string' ? data.details : '';
+        alert([errorMsg, details].filter(Boolean).join('\n\n'));
+        return;
+      }
+      localStorage.setItem('playerId', data.playerId);
+      localStorage.setItem('username', username);
+      setPlayerId(data.playerId);
+      setJoiningSeatId(null);
+      await fetchGameState();
+    } catch (error) {
+      alert(`Failed to join: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setJoiningSeatId(null);
+    }
+  };
+
+  const isInGame = !!playerId && gameState?.players.includes(playerId);
+  const showJoinView =
+    !!gameState &&
+    gameState.phase === 'lobby' &&
+    (!playerId || !gameState.players.includes(playerId));
+
+  if (!gameState) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-[#141414] text-gray-100">
+        <div className="text-xl">Loading game...</div>
+      </div>
+    );
+  }
+
+  if (showJoinView) {
+    const openSeatIdsJoin = gameState.openSeatIds ?? [];
+    return (
+      <div className="min-h-dvh overflow-y-auto overflow-x-hidden bg-[#141414] p-4 text-gray-100 scrollbar-dark">
+        <div className="mx-auto max-w-2xl space-y-4">
+          <div className="rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-4">
+            <h1 className="mb-2 text-xl font-semibold">Join this game</h1>
+            <p className="mb-4 text-sm text-gray-400">
+              Enter your name and click an open seat at the table to sit there.
+            </p>
+            <label className="mb-2 block text-sm font-medium text-gray-300">Your name</label>
+            <input
+              type="text"
+              value={joinUsername}
+              onChange={(e) => setJoinUsername(e.target.value)}
+              placeholder="Enter your name"
+              className="mb-4 w-full rounded-lg border border-gray-600 bg-[#111] px-3 py-2 text-gray-100 placeholder-gray-500"
+            />
+            <Link
+              href="/"
+              className="inline-block rounded-md border border-gray-500 bg-[#111] px-3 py-1.5 text-sm font-medium text-gray-100 hover:bg-[#1a1a1a]"
+            >
+              ← Back to home
+            </Link>
+          </div>
+          <section className="rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2 shadow-sm">
+            <h2 className="mb-2 text-center text-base font-semibold text-gray-100">Table — click a seat to join</h2>
+            <div className="relative mx-auto w-full max-w-[940px]">
+              <div
+                className="relative w-full rounded-[50%] p-[18px]"
+                style={{
+                  aspectRatio: '2.2 / 1',
+                  background: 'linear-gradient(145deg, #3d2817 0%, #2a1810 40%, #1a0f08 100%)',
+                  boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.4)',
+                }}
+              >
+                <div
+                  className="relative h-full w-full rounded-[50%] overflow-hidden"
+                  style={{
+                    background: 'radial-gradient(ellipse 80% 70% at 50% 45%, #2d8b4e 0%, #247a3d 25%, #1a5c2e 60%, #0f3d1f 100%)',
+                    boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.06), inset 0 -2px 6px rgba(0,0,0,0.2)',
+                  }}
+                >
+                  {gameState.players.map((pid, idx) => {
+                    const n = gameState.players.length;
+                    const angle = (-90 + (360 / n) * idx) * (Math.PI / 180);
+                    const radiusX = 44;
+                    const radiusY = 36;
+                    const x = 50 + radiusX * Math.cos(angle);
+                    const y = 50 + radiusY * Math.sin(angle);
+                    const isOpen = openSeatIdsJoin.includes(pid);
+                    const isClaiming = joiningSeatId === pid;
+                    return (
+                      <div
+                        key={pid}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => isOpen && handleJoinSeat(pid)}
+                        onKeyDown={(e) => isOpen && (e.key === 'Enter' || e.key === ' ') && handleJoinSeat(pid)}
+                        className={`absolute flex h-[62px] w-[182px] -translate-x-1/2 -translate-y-1/2 flex-col justify-center rounded-lg border-2 px-3 py-2 text-xs shadow-md ${
+                          isOpen
+                            ? 'cursor-pointer border-amber-500/80 bg-amber-900/40 text-amber-100 hover:border-amber-400 hover:bg-amber-800/50'
+                            : 'border-[#5c4a3a] bg-[#3d2817] text-gray-100'
+                        } ${isClaiming ? 'animate-pulse opacity-80' : ''}`}
+                        style={{
+                          left: `${x}%`,
+                          top: `${y}%`,
+                          boxShadow: isOpen ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.4)',
+                        }}
+                      >
+                        <div className="truncate text-center font-semibold">
+                          {isOpen ? (isClaiming ? 'Joining…' : 'Click to join') : gameState.playerNames?.[pid] ?? `Seat ${idx + 1}`}
+                        </div>
+                        <div className="truncate text-center text-[10px] opacity-90">
+                          {isOpen ? 'Open seat' : 'Taken'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (!playerId) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#141414] text-gray-100">
         <div className="text-xl">Loading game...</div>
       </div>
     );
@@ -374,52 +519,102 @@ export default function GamePage() {
             <section className="rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2 shadow-sm lg:p-2.5">
               <h2 className="mb-2 text-center text-base font-semibold text-gray-100">Table</h2>
 
-              <div className="relative mx-auto h-[260px] w-full max-w-[700px] rounded-[999px] border border-[#3a3a3a] bg-[radial-gradient(circle_at_50%_35%,#2f7a36_0%,#1e5b29_40%,#164421_75%,#12361c_100%)] sm:h-[290px] lg:h-[320px] xl:h-[350px]">
-                {gameState.players.map((pid, idx) => {
-                  const n = gameState.players.length;
-                  const angle = (-90 + (360 / n) * idx) * (Math.PI / 180);
-                  const x = 50 + 41 * Math.cos(angle);
-                  const y = 50 + 41 * Math.sin(angle);
-                  const isOpen = openSeatIds.includes(pid);
-                  const isCurrent = gameState.currentPlayerId === pid;
-                  return (
+              {/* Poker Now style: oval table with dark rail and green felt */}
+              <div className="relative mx-auto w-full max-w-[940px]">
+                <div
+                  className="relative w-full rounded-[50%] p-[18px] shadow-[inset_0_0_20px_rgba(0,0,0,0.4),0_4px_12px_rgba(0,0,0,0.5)]"
+                  style={{
+                    aspectRatio: '2.2 / 1',
+                    background: 'linear-gradient(145deg, #3d2817 0%, #2a1810 40%, #1a0f08 100%)',
+                    boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.3), 0 6px 20px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  {/* Green felt oval */}
+                  <div
+                    className="relative h-full w-full rounded-[50%] overflow-hidden"
+                    style={{
+                      background: 'radial-gradient(ellipse 80% 70% at 50% 45%, #2d8b4e 0%, #247a3d 25%, #1a5c2e 60%, #0f3d1f 100%)',
+                      boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.06), inset 0 -2px 6px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    {gameState.players.map((pid, idx) => {
+                      const n = gameState.players.length;
+                      const angle = (-90 + (360 / n) * idx) * (Math.PI / 180);
+                      const radiusX = 44;
+                      const radiusY = 36;
+                      const x = 50 + radiusX * Math.cos(angle);
+                      const y = 50 + radiusY * Math.sin(angle);
+                      const isOpen = openSeatIds.includes(pid);
+                      const isCurrent = gameState.currentPlayerId === pid;
+                      return (
+                        <div
+                          key={pid}
+                          role={isOpen ? 'button' : undefined}
+                          tabIndex={isOpen ? 0 : undefined}
+                          onClick={
+                            isOpen && gameState.phase === 'lobby'
+                              ? () => sendAction('claim_seat', { seatId: pid })
+                              : undefined
+                          }
+                          onKeyDown={
+                            isOpen && gameState.phase === 'lobby'
+                              ? (e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    sendAction('claim_seat', { seatId: pid });
+                                  }
+                                }
+                              : undefined
+                          }
+                          className={`absolute flex h-[62px] w-[182px] -translate-x-1/2 -translate-y-1/2 flex-col justify-center rounded-lg border-2 px-3 py-2 text-xs shadow-md ${
+                            isCurrent
+                              ? 'border-amber-400 bg-amber-50 text-black ring-2 ring-amber-400/50'
+                              : isOpen
+                                ? 'cursor-pointer border-amber-500/70 bg-[#2a1810] text-amber-200/90 hover:border-amber-400 hover:bg-[#3d2817]'
+                                : 'border-[#5c4a3a] bg-[#3d2817] text-gray-100'
+                          }`}
+                          style={{
+                            left: `${x}%`,
+                            top: `${y}%`,
+                            boxShadow: isCurrent ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 6px rgba(0,0,0,0.4)',
+                          }}
+                        >
+                          <div className="truncate text-center font-semibold">
+                            {isOpen ? 'Open — click to sit' : displayName(pid)}
+                          </div>
+                          <div className="truncate text-center text-[10px] opacity-90">
+                            {isOpen ? 'Waiting for player' : `${gameState.hands[pid]?.length ?? 0} cards`}
+                            {pid === gameState.hostId ? ' • Host' : ''}
+                            {pid === gameState.bidderId ? ' • Bidder' : ''}
+                            {gameState.partnerPlayerIds.includes(pid) ? ' • Partner' : ''}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Center: current trick */}
                     <div
-                      key={pid}
-                      className={`absolute flex h-[52px] w-[152px] -translate-x-1/2 -translate-y-1/2 flex-col justify-center rounded-full border px-2.5 py-1.5 text-xs shadow-sm ${
-                        isCurrent ? 'border-[#f0f0f0] bg-[#f0f0f0] text-black' : 'border-[#d8d8d8] bg-white text-black'
-                      }`}
-                      style={{ left: `${x}%`, top: `${y}%` }}
+                      className="absolute left-1/2 top-1/2 w-[340px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[#1a3d1a] bg-[#0a1f0a]/95 p-4 shadow-lg backdrop-blur-sm"
+                      style={{ boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.3)' }}
                     >
-                      <div className="truncate text-center font-medium">
-                        {isOpen ? 'Open Seat' : displayName(pid)}
+                      <div className="mb-2 text-center text-xs text-green-200/90">
+                        {lastCompletedTrick
+                          ? `Last trick: ${displayName(lastCompletedTrick.winnerId || '')} won ${lastCompletedTrick.points ?? 0} pts`
+                          : 'No completed tricks yet'}
                       </div>
-                      <div className="truncate text-center text-[10px] opacity-80">
-                        {isOpen ? 'Waiting for player' : `${gameState.hands[pid]?.length ?? 0} cards`}
-                        {pid === gameState.hostId ? ' • Host' : ''}
-                        {pid === gameState.bidderId ? ' • Bidder' : ''}
-                        {gameState.partnerPlayerIds.includes(pid) ? ' • Partner' : ''}
+                      <div className="flex min-h-24 flex-wrap items-center justify-center gap-2">
+                        {trickInProgress?.plays?.length ? (
+                          trickInProgress.plays.map((play) => (
+                            <div key={`${play.playerId}-${play.card.id}`} className="text-center">
+                              {renderCard(play.card, false, true)}
+                              <div className="mt-1 text-[10px] text-green-100">{displayName(play.playerId)}</div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-xs text-green-300/80">No active trick yet</div>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
-
-                <div className="absolute left-1/2 top-1/2 w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2f2f2f] bg-[#111111cc] p-3 shadow-sm backdrop-blur-sm">
-                  <div className="mb-2 text-center text-xs text-gray-200">
-                    {lastCompletedTrick
-                      ? `Last trick: ${displayName(lastCompletedTrick.winnerId || '')} won ${lastCompletedTrick.points ?? 0} pts`
-                      : 'No completed tricks yet'}
-                  </div>
-                  <div className="flex min-h-28 flex-wrap items-center justify-center gap-2">
-                    {trickInProgress?.plays?.length ? (
-                      trickInProgress.plays.map((play) => (
-                        <div key={`${play.playerId}-${play.card.id}`} className="text-center">
-                          {renderCard(play.card, false, true)}
-                          <div className="mt-1 text-[10px] text-gray-100">{displayName(play.playerId)}</div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-xs text-gray-300">No active trick yet</div>
-                    )}
                   </div>
                 </div>
               </div>
