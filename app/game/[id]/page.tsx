@@ -222,10 +222,10 @@ export default function GamePage() {
   const showLeaderboardTotals = gameState.phase === 'finished';
   const gameCodeDisplay = gameState.gameCode ?? gameId;
   return (
-    <div className="h-dvh overflow-hidden bg-[#141414] p-1 text-gray-100 lg:p-2">
-      <div className="mx-auto h-full max-w-7xl">
-        <div className="grid h-full gap-1.5 lg:grid-cols-[1fr_320px] lg:gap-2">
-          <div className="flex min-h-0 flex-col gap-1.5 lg:gap-2">
+    <div className="min-h-dvh overflow-y-auto overflow-x-hidden bg-[#141414] p-1 text-gray-100 lg:p-2 scrollbar-dark">
+      <div className="mx-auto min-h-dvh max-w-7xl">
+        <div className="grid gap-1.5 lg:grid-cols-[1fr_320px] lg:items-start lg:gap-2">
+          <div className="flex flex-col gap-1.5 lg:gap-2">
             <div className="rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
@@ -284,6 +284,86 @@ export default function GamePage() {
                 </div>
               </div>
             </div>
+
+            {gameState.phase === 'finished' && gameState.scores && gameState.bidderId && (
+              <div className="rounded-2xl border-2 border-[#3a3a3a] bg-[#1b1b1b] p-4 shadow-lg lg:p-5">
+                <h2 className="mb-4 text-center text-xl font-bold text-white">Hand results</h2>
+                {(() => {
+                  const teamWon = (gameState.scores[gameState.bidderId] ?? 0) > 0;
+                  const bidderName = displayName(gameState.bidderId);
+                  const partnerNames = (gameState.partnerPlayerIds ?? []).map((pid) => displayName(pid));
+                  return (
+                    <>
+                      <div
+                        className={`mb-4 rounded-xl px-4 py-3 text-center text-lg font-semibold ${
+                          teamWon ? 'bg-emerald-900/60 text-emerald-100' : 'bg-red-900/50 text-red-100'
+                        }`}
+                      >
+                        {teamWon ? (
+                          <>The bidder team won!</>
+                        ) : (
+                          <>The bidder team lost.</>
+                        )}
+                      </div>
+                      <p className="mb-4 text-center text-sm text-gray-300">
+                        <span className="font-medium text-white">{bidderName}</span>
+                        {partnerNames.length > 0 && (
+                          <> and partner{partnerNames.length > 1 ? 's' : ''} {partnerNames.join(', ')}</>
+                        )}
+                      </p>
+                      <div className="space-y-2 rounded-lg border border-[#2b2b2b] bg-[#111] p-3">
+                        <div className="grid grid-cols-3 gap-2 border-b border-gray-700 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          <span>Player</span>
+                          <span className="text-right">This hand</span>
+                          <span className="text-right">Total points</span>
+                        </div>
+                        {gameState.players.map((pid) => {
+                          const delta = gameState.scores?.[pid] ?? 0;
+                          const total = gameState.runningScores?.[pid] ?? 0;
+                          return (
+                            <div
+                              key={pid}
+                              className="grid grid-cols-3 gap-2 text-sm"
+                            >
+                              <span className="font-medium text-gray-100">
+                                {displayName(pid)}
+                                {pid === playerId ? ' (You)' : ''}
+                              </span>
+                              <span className={`text-right font-medium ${delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {delta >= 0 ? '+' : ''}{delta}
+                              </span>
+                              <span className="text-right text-gray-300">{total}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {gameState.trumpSuit && gameState.partnerCards?.length > 0 && (
+              <div className="rounded-xl border-2 border-amber-500/80 bg-gradient-to-r from-amber-900/90 to-amber-800/90 px-4 py-3 shadow-lg">
+                <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-center">
+                  <span className="text-sm font-medium uppercase tracking-wide text-amber-200">Trump</span>
+                  <span className="text-2xl font-bold text-white drop-shadow-sm">{gameState.trumpSuit}</span>
+                  <span className="text-amber-300/80">·</span>
+                  <span className="text-sm font-medium uppercase tracking-wide text-amber-200">Partner card{gameState.partnerCards.length > 1 ? 's' : ''}</span>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {gameState.partnerCards.map((pc, i) => (
+                      <span
+                        key={`${pc.rank}-${pc.suit}-${i}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-amber-400/60 bg-black/30 px-3 py-1.5 text-lg font-bold text-white"
+                      >
+                        <span className={pc.suit === '♥' || pc.suit === '♦' ? 'text-red-400' : 'text-gray-100'}>{pc.rank}</span>
+                        <span className={pc.suit === '♥' || pc.suit === '♦' ? 'text-red-400' : 'text-gray-100'}>{pc.suit}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {trickJustEnded && currentTrick?.winnerId && (
               <div className="rounded-xl border border-[#2b2b2b] bg-[#1f1f1f] px-4 py-2 text-sm font-medium">
@@ -475,38 +555,48 @@ export default function GamePage() {
 
                   {Array.from({ length: requiredPartners }).map((_, i) => (
                     <div key={i} className="grid grid-cols-2 gap-2">
-                      <select
-                        value={partnerSelections[i].suit}
-                        onChange={(e) =>
-                          setPartnerSelections((prev) =>
-                            prev.map((p, idx) => (idx === i ? { ...p, suit: e.target.value as Suit | '' } : p))
-                          )
-                        }
-                        className="rounded-lg border border-gray-600 bg-[#111] px-2 py-2 text-gray-100"
-                      >
-                        <option value="">Suit</option>
-                        {suitOptions.map((suit) => (
-                          <option key={suit} value={suit}>
-                            {suit}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={partnerSelections[i].rank}
-                        onChange={(e) =>
-                          setPartnerSelections((prev) =>
-                            prev.map((p, idx) => (idx === i ? { ...p, rank: e.target.value as Rank | '' } : p))
-                          )
-                        }
-                        className="rounded-lg border border-gray-600 bg-[#111] px-2 py-2 text-gray-100"
-                      >
-                        <option value="">Rank</option>
-                        {rankOptions.map((rank) => (
-                          <option key={rank} value={rank}>
-                            {rank}
-                          </option>
-                        ))}
-                      </select>
+                      <div>
+                        <label className="mb-1 block font-medium">
+                          Partner {requiredPartners > 1 ? `${i + 1} ` : ''}suit
+                        </label>
+                        <select
+                          value={partnerSelections[i].suit}
+                          onChange={(e) =>
+                            setPartnerSelections((prev) =>
+                              prev.map((p, idx) => (idx === i ? { ...p, suit: e.target.value as Suit | '' } : p))
+                            )
+                          }
+                          className="w-full rounded-lg border border-gray-600 bg-[#111] px-2 py-2 text-gray-100"
+                        >
+                          <option value="">Select suit</option>
+                          {suitOptions.map((suit) => (
+                            <option key={suit} value={suit}>
+                              {suit}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block font-medium">
+                          Partner {requiredPartners > 1 ? `${i + 1} ` : ''}card
+                        </label>
+                        <select
+                          value={partnerSelections[i].rank}
+                          onChange={(e) =>
+                            setPartnerSelections((prev) =>
+                              prev.map((p, idx) => (idx === i ? { ...p, rank: e.target.value as Rank | '' } : p))
+                            )
+                          }
+                          className="w-full rounded-lg border border-gray-600 bg-[#111] px-2 py-2 text-gray-100"
+                        >
+                          <option value="">Select rank</option>
+                          {rankOptions.map((rank) => (
+                            <option key={rank} value={rank}>
+                              {rank}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   ))}
 
@@ -552,9 +642,9 @@ export default function GamePage() {
             )}
           </div>
 
-          <aside className="flex h-full min-h-0 flex-col rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
+          <aside className="flex flex-col rounded-2xl border border-[#2b2b2b] bg-[#1b1b1b] p-2.5 shadow-sm lg:p-3">
             <h2 className="mb-3 text-base font-semibold">Leaderboard</h2>
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+            <div className="space-y-2">
               {gameState.players.map((pid) => {
                 const totalPoints = gameState.runningScores?.[pid] ?? gameState.scores?.[pid] ?? 0;
                 return (
