@@ -1,5 +1,8 @@
 import { Card, Suit, Trick } from './types';
 
+// How long a completed trick stays visible before the next card can be played.
+export const TRICK_END_DELAY_MS = 10_000;
+
 export function cardPoints(card: Card): number {
   if (card.rank === 'A') return 15;
   if (card.rank === '10') return 10;

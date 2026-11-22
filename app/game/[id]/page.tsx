@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { GameState, Card, Rank, Suit } from '@/lib/game/types';
-import { getMinimumBid, cardPoints } from '@/lib/game/rules';
+import { getMinimumBid, cardPoints, TRICK_END_DELAY_MS } from '@/lib/game/rules';
 
 export default function GamePage() {
   const params = useParams();
@@ -24,6 +24,14 @@ export default function GamePage() {
   const [testMode, setTestMode] = useState(false);
   const [joinUsername, setJoinUsername] = useState('');
   const [joiningSeatId, setJoiningSeatId] = useState<string | null>(null);
+  // Offset between server and local clocks, and a ticking "now" for the trick-end countdown.
+  const [clockOffset, setClockOffset] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 500);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     const storedPlayerId = localStorage.getItem('playerId');
@@ -61,6 +69,7 @@ export default function GamePage() {
       const data = await res.json();
       if (data.game) {
         setGameState(data.game.current_state);
+        if (typeof data.serverTime === 'number') setClockOffset(data.serverTime - Date.now());
       }
     } catch (error) {
       console.error('Error fetching game state:', error);
@@ -85,7 +94,7 @@ export default function GamePage() {
       });
 
       const rawText = await res.text();
-      let data: { gameState?: unknown; error?: string; details?: string } = {};
+      let data: { gameState?: unknown; serverTime?: number; error?: string; details?: string } = {};
       try {
         data = rawText ? JSON.parse(rawText) : {};
       } catch {
@@ -95,6 +104,7 @@ export default function GamePage() {
 
       if (res.ok && data.gameState) {
         setGameState(data.gameState as GameState);
+        if (typeof data.serverTime === 'number') setClockOffset(data.serverTime - Date.now());
         return;
       }
 
@@ -263,7 +273,15 @@ export default function GamePage() {
   }
 
   const myHand = gameState.hands[playerId] || [];
-  const isMyTurn = gameState.currentPlayerId === playerId;
+  // Trick-end hold: keep the completed trick (incl. the last card) visible for 10s.
+  const heldTrick = gameState.tricks[gameState.tricks.length - 1];
+  const holdRemainingMs =
+    heldTrick?.completedAt && heldTrick.winnerId && heldTrick.plays.length === gameState.players.length
+      ? heldTrick.completedAt + TRICK_END_DELAY_MS - (nowMs + clockOffset)
+      : 0;
+  const holdActive = holdRemainingMs > 0;
+  const holdSeconds = Math.max(1, Math.ceil(holdRemainingMs / 1000));
+  const isMyTurn = gameState.currentPlayerId === playerId && !holdActive;
   const isHost = gameState.hostId === playerId;
   const amRevealedPartner = gameState.partnerPlayerIds.includes(playerId);
   const openSeatIds = gameState.openSeatIds ?? [];
@@ -318,7 +336,7 @@ export default function GamePage() {
     gameState.phase === 'bidding' ||
     (gameState.phase === 'choose_trump_and_partners' && gameState.bidderId === playerId) ||
     (gameState.phase === 'scoring' && gameState.bidderId === playerId) ||
-    (gameState.phase === 'finished' && isHost);
+    (gameState.phase === 'finished' && isHost && !holdActive);
 
   const renderCard = (card: Card, clickable: boolean = false, compact = false) => {
     const suitColors: Record<string, string> = {
@@ -364,8 +382,7 @@ export default function GamePage() {
     );
   };
 
-  const showLeaderboardTotals = gameState.phase === 'finished';
-  const gameCodeDisplay = gameState.gameCode ?? gameId;
+    const gameCodeDisplay = gameState.gameCode ?? gameId;
   return (
     <div className="min-h-dvh overflow-y-auto overflow-x-hidden bg-[#141414] p-1 text-gray-100 lg:p-2 scrollbar-dark">
       <div className="mx-auto min-h-dvh max-w-7xl">
@@ -430,52 +447,55 @@ export default function GamePage() {
               </div>
             </div>
 
-            {gameState.phase === 'finished' && gameState.scores && gameState.bidderId && (
+            {gameState.phase === 'finished' && !holdActive && gameState.scores && gameState.bidderId && (
               <div className="rounded-2xl border-2 border-[#3a3a3a] bg-[#1b1b1b] p-4 shadow-lg lg:p-5">
                 <h2 className="mb-4 text-center text-xl font-bold text-white">Hand results</h2>
                 {(() => {
-                  const teamWon = (gameState.scores[gameState.bidderId] ?? 0) > 0;
-                  const bidderName = displayName(gameState.bidderId);
-                  const partnerNames = (gameState.partnerPlayerIds ?? []).map((pid) => displayName(pid));
+                  const bidderId = gameState.bidderId;
+                  const teamIds = [bidderId, ...(gameState.partnerPlayerIds ?? []).filter((p) => p !== bidderId)];
+                  const teamWon = (gameState.scores[bidderId] ?? 0) > 0;
+                  const bidAmount = gameState.winningBid?.amount ?? 0;
+                  const teamTrickPoints = teamIds.reduce((sum, pid) => sum + (gameState.pointsWonByPlayer?.[pid] ?? 0), 0);
+                  const roleOf = (pid: string) =>
+                    pid === bidderId ? 'Bidder' : teamIds.includes(pid) ? 'Partner' : 'Opponent';
+                  const rows = [
+                    ...teamIds,
+                    ...gameState.players.filter((pid) => !teamIds.includes(pid)),
+                  ];
                   return (
                     <>
                       <div
-                        className={`mb-4 rounded-xl px-4 py-3 text-center text-lg font-semibold ${
+                        className={`mb-2 rounded-xl px-4 py-3 text-center text-lg font-semibold ${
                           teamWon ? 'bg-emerald-900/60 text-emerald-100' : 'bg-red-900/50 text-red-100'
                         }`}
                       >
-                        {teamWon ? (
-                          <>The bidder team won!</>
-                        ) : (
-                          <>The bidder team lost.</>
-                        )}
+                        {teamWon ? 'The bidder team won!' : 'The bidder team lost.'}
                       </div>
                       <p className="mb-4 text-center text-sm text-gray-300">
-                        <span className="font-medium text-white">{bidderName}</span>
-                        {partnerNames.length > 0 && (
-                          <> and partner{partnerNames.length > 1 ? 's' : ''} {partnerNames.join(', ')}</>
-                        )}
+                        Bid {bidAmount} · Bidder team took {teamTrickPoints} points
                       </p>
                       <div className="space-y-2 rounded-lg border border-[#2b2b2b] bg-[#111] p-3">
-                        <div className="grid grid-cols-3 gap-2 border-b border-gray-700 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr] gap-2 border-b border-gray-700 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
                           <span>Player</span>
+                          <span>Role</span>
+                          <span className="text-right">Trick pts</span>
                           <span className="text-right">This hand</span>
-                          <span className="text-right">Total points</span>
+                          <span className="text-right">Total</span>
                         </div>
-                        {gameState.players.map((pid) => {
+                        {rows.map((pid) => {
                           const delta = gameState.scores?.[pid] ?? 0;
                           const total = gameState.runningScores?.[pid] ?? 0;
+                          const role = roleOf(pid);
                           return (
-                            <div
-                              key={pid}
-                              className="grid grid-cols-3 gap-2 text-sm"
-                            >
-                              <span className="font-medium text-gray-100">
+                            <div key={pid} className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr] gap-2 text-sm">
+                              <span className="truncate font-medium text-gray-100">
                                 {displayName(pid)}
                                 {pid === playerId ? ' (You)' : ''}
                               </span>
-                              <span className={`text-right font-medium ${delta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {delta >= 0 ? '+' : ''}{delta}
+                              <span className={role === 'Opponent' ? 'text-gray-400' : 'text-amber-300'}>{role}</span>
+                              <span className="text-right text-gray-300">{gameState.pointsWonByPlayer?.[pid] ?? 0}</span>
+                              <span className={`text-right font-medium ${delta > 0 ? 'text-emerald-400' : delta < 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                                {delta > 0 ? '+' : ''}{delta}
                               </span>
                               <span className="text-right text-gray-300">{total}</span>
                             </div>
@@ -513,6 +533,7 @@ export default function GamePage() {
             {trickJustEnded && currentTrick?.winnerId && (
               <div className="rounded-xl border border-[#2b2b2b] bg-[#1f1f1f] px-4 py-2 text-sm font-medium">
                 Trick ended: {displayName(currentTrick.winnerId)} won {currentTrick.points ?? 0} points.
+                {holdActive && <span className="ml-2 text-gray-400">Next trick in {holdSeconds}s…</span>}
               </div>
             )}
 
@@ -598,13 +619,15 @@ export default function GamePage() {
                       style={{ boxShadow: 'inset 0 0 20px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.3)' }}
                     >
                       <div className="mb-2 text-center text-xs text-green-200/90">
-                        {lastCompletedTrick
+                        {holdActive
+                          ? `${displayName(currentTrick?.winnerId || '')} wins this trick (${currentTrick?.points ?? 0} pts)`
+                          : lastCompletedTrick
                           ? `Last trick: ${displayName(lastCompletedTrick.winnerId || '')} won ${lastCompletedTrick.points ?? 0} pts`
                           : 'No completed tricks yet'}
                       </div>
                       <div className="flex min-h-24 flex-wrap items-center justify-center gap-2">
-                        {trickInProgress?.plays?.length ? (
-                          trickInProgress.plays.map((play) => (
+                        {(holdActive ? currentTrick : trickInProgress)?.plays?.length ? (
+                          (holdActive ? currentTrick : trickInProgress)!.plays.map((play) => (
                             <div key={`${play.playerId}-${play.card.id}`} className="text-center">
                               {renderCard(play.card, false, true)}
                               <div className="mt-1 text-[10px] text-green-100">{displayName(play.playerId)}</div>
@@ -627,7 +650,7 @@ export default function GamePage() {
                 </h3>
                 {gameState.phase === 'playing' && (
                   <span className={`rounded px-2 py-1 text-xs font-semibold ${isMyTurn ? 'bg-white text-black' : 'bg-[#2f2f2f] text-gray-100'}`}>
-                    {isMyTurn ? 'Your Turn' : `Waiting for ${gameState.currentPlayerId ? displayName(gameState.currentPlayerId) : '-'}`}
+                    {holdActive ? `Next trick in ${holdSeconds}s` : isMyTurn ? 'Your Turn' : `Waiting for ${gameState.currentPlayerId ? displayName(gameState.currentPlayerId) : '-'}`}
                   </span>
                 )}
               </div>
@@ -841,25 +864,23 @@ export default function GamePage() {
             <h2 className="mb-3 text-base font-semibold">Leaderboard</h2>
             <div className="space-y-2">
               {gameState.players.map((pid) => {
-                const totalPoints = gameState.runningScores?.[pid] ?? gameState.scores?.[pid] ?? 0;
+                // Score as of the end of the last completed hand. While the final trick is
+                // still on display, hold back this hand's result.
+                const afterHand = gameState.runningScores?.[pid] ?? 0;
+                const totalPoints =
+                  gameState.phase === 'finished' && holdActive ? afterHand - (gameState.scores?.[pid] ?? 0) : afterHand;
                 return (
                   <div key={pid} className="rounded-lg border border-gray-700 bg-[#111] p-2 text-sm">
                     <div className="font-medium">
                       {displayName(pid)}
                       {pid === playerId ? ' (You)' : ''}
                     </div>
-                    <div className="text-xs text-gray-300">
-                      Total points: {showLeaderboardTotals ? totalPoints : '—'}
-                    </div>
+                    <div className="text-xs text-gray-300">Total points: {totalPoints}</div>
                   </div>
                 );
               })}
             </div>
-            {!showLeaderboardTotals && (
-              <div className="mt-2 text-xs text-gray-400">
-                Totals update after the 10th trick is scored.
-              </div>
-            )}
+            <div className="mt-2 text-xs text-gray-400">Scores are current to the end of the last hand.</div>
           </aside>
         </div>
       </div>

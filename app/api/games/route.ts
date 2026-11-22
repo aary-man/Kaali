@@ -303,6 +303,7 @@ export async function GET(request: NextRequest) {
           playerNames: hydratedNames,
         },
       },
+      serverTime: Date.now(),
     });
   } catch (error) {
     console.error('Error fetching game:', error);

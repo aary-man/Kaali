@@ -51,6 +51,7 @@ export interface Trick {
   plays: { playerId: PlayerId; card: Card }[];
   winnerId?: PlayerId;
   points?: number;
+  completedAt?: number; // server ms timestamp when the last card was played
 }
 
 export interface GameState {

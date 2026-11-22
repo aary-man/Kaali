@@ -1,5 +1,5 @@
 import { buildDeckForPlayers } from './deck';
-import { getMinimumBid, getTotalPoints, isValidBid, winnerOfTrick } from './rules';
+import { getMinimumBid, getTotalPoints, isValidBid, winnerOfTrick, TRICK_END_DELAY_MS } from './rules';
 import { Bid, Card, GameState, PartnerCard, Phase, PlayerId, Trick } from './types';
 
 interface CreateGameOptions {
@@ -343,6 +343,15 @@ export function playCard(state: GameState, playerId: PlayerId, cardId: string): 
 
   const card = hand[cardIndex];
   const currentTrick = state.tricks[state.tricks.length - 1];
+
+  // Hold the next lead until the finished trick has been visible for a while.
+  if (
+    currentTrick?.completedAt &&
+    currentTrick.plays.length === state.players.length &&
+    Date.now() < currentTrick.completedAt + TRICK_END_DELAY_MS
+  ) {
+    throw new Error('Wait for the current trick to finish before playing');
+  }
   const trickInProgress =
     currentTrick && currentTrick.plays.length < state.players.length
       ? currentTrick
@@ -391,6 +400,7 @@ export function playCard(state: GameState, playerId: PlayerId, cardId: string): 
     const { winnerId, points } = winnerOfTrick(updatedTrick, state.trumpSuit);
     updatedTrick.winnerId = winnerId;
     updatedTrick.points = points;
+    updatedTrick.completedAt = Date.now();
 
     // Check if all tricks are complete
     if (newTricks.length === 10) {
