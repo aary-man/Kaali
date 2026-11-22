@@ -205,7 +205,7 @@ export async function POST(
       await persistUserHistoryRows(resolvedGameId, updatedState);
     }
 
-    return NextResponse.json({ gameState: updatedState });
+    return NextResponse.json({ gameState: updatedState, serverTime: Date.now() });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';
     console.error('Error processing action:', error);
